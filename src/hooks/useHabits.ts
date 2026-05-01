@@ -3,7 +3,7 @@ import { supabase, Habit, HabitDailyLog, HabitWithType } from '../lib/supabase'
 import { useAuth } from './useAuth'
 import { useReflections } from './useReflections'
 
-export function useHabits(selectedDate?: string) {
+export function useHabits(selectedDate?: string, options?: { includeArchived?: boolean }) {
   const { user } = useAuth()
   const { generateReflection, getTodaysReflection } = useReflections()
   const [habits, setHabits] = useState<HabitWithType[]>([])
@@ -58,9 +58,12 @@ export function useHabits(selectedDate?: string) {
         )
         .or(`user_id.eq.${user.id},user_id.is.null`)
         .eq('is_visible', true)
-        .or('is_archived.eq.false,is_archived.is.null')
         // Include logs from the last 30 days for pull-back calculations
         .gte('habits_daily_logs.log_date', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
+
+      if (!options?.includeArchived) {
+        query = query.or('is_archived.eq.false,is_archived.is.null')
+      }
 
       const { data, error } = await query.order('current_start_time', { ascending: true })
 
@@ -241,6 +244,26 @@ export function useHabits(selectedDate?: string) {
       )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update habit start time')
+    }
+  }
+
+  const updateHabitWeeklyDays = async (habitId: string, weeklyDays: string[]) => {
+    if (!user) return
+    try {
+      const value = weeklyDays.length > 0 ? weeklyDays : null
+      const { error } = await supabase
+        .from('cassian_habits')
+        .update({ weekly_days: value })
+        .eq('id', habitId)
+        .eq('user_id', user.id)
+      if (error) throw error
+      setHabits(prevHabits =>
+        prevHabits.map(habit =>
+          habit.id === habitId ? { ...habit, weekly_days: value } : habit
+        )
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update weekly days')
     }
   }
 
@@ -465,6 +488,7 @@ export function useHabits(selectedDate?: string) {
     updateHabitDuration,
     updateHabitName,
     updateHabitDefaultStartTime,
+    updateHabitWeeklyDays,
     archiveHabit,
     unarchiveHabit,
     deleteHabit,

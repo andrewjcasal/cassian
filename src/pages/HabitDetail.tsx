@@ -50,7 +50,7 @@ const HabitDetail = () => {
       <HabitDetailTabs
         habitId={habit.id}
         habitName={habit.name}
-        initialTab="notes"
+        initialTab="settings"
         initialContext={{
           background: habit.background || '',
           benefits: habit.benefits || '',

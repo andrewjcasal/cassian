@@ -1,9 +1,5 @@
 import { useState } from 'react'
-import {
-  Clock,
-  CheckCircle2,
-  Circle,
-} from 'lucide-react'
+import { CheckCircle2, Circle } from 'lucide-react'
 
 interface HabitsListProps {
   habits: any[]
@@ -53,7 +49,7 @@ const HabitsList = ({
   }
 
   return (
-    <>
+    <div className="p-2 space-y-1.5">
       {habits.map((habit, index) => {
         const dailyLog = habit.habits_daily_logs?.find((log: any) => log.log_date === selectedDate)
         const isCompleted = dailyLog?.actual_start_time || false
@@ -63,43 +59,41 @@ const HabitsList = ({
           <div
             key={habit.id}
             onClick={() => onHabitSelect(habit.id)}
-            className={`border-b border-gray-200 px-2 py-1 cursor-pointer transition-colors ${
+            className={`rounded-lg border px-2.5 py-1.5 cursor-pointer backdrop-blur-sm transition-all ${
               isSelected
-                ? 'bg-yellow-100'
+                ? 'bg-amber-200 border-transparent shadow-sm'
                 : isCompleted
-                ? 'bg-green-50 hover:bg-green-100'
-                : 'bg-white hover:bg-gray-50'
+                ? 'bg-green-50/80 border-green-100 hover:bg-green-50'
+                : 'bg-white/70 border-white hover:bg-white hover:shadow-sm'
             }`}
           >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-1.5">
+            <div className="flex items-start justify-between">
+              <div className="flex items-start gap-1.5 min-w-0 flex-1">
                 <button
                   onClick={e => {
                     e.stopPropagation()
                     onToggleCompletion(habit.id)
                   }}
-                  className="flex-shrink-0"
+                  className="flex-shrink-0 mt-[3px]"
                 >
                   {isCompleted ? (
-                    <CheckCircle2 className="w-3 h-3 text-green-600" />
+                    <CheckCircle2 className="w-2 h-2 text-green-600" />
                   ) : (
-                    <Circle className="w-3 h-3 text-neutral-400 hover:text-neutral-600" />
+                    <Circle className="w-2 h-2 text-neutral-400 hover:text-neutral-600" />
                   )}
                 </button>
-
                 <div className="min-w-0 flex-1">
-                  <h3
-                    className={`font-medium text-sm ${
-                      isCompleted ? 'text-green-800' : 'text-neutral-900'
-                    }`}
-                  >
-                    {habit.name}
-                  </h3>
-                  {/* Only show timing info for calendar habits */}
-                  {habit.habits_types?.scheduling_rule !== 'non_calendar' && (
-                    <div className="flex items-center space-x-1 text-xs text-neutral-600">
-                      <Clock className="w-2 h-2" />
-                      <span>{habit.duration}m</span>
+                <h3
+                  className={`font-medium text-sm ${
+                    isCompleted ? 'text-green-800' : 'text-neutral-900'
+                  }`}
+                >
+                  {habit.name}
+                </h3>
+                {/* Only show timing info for calendar habits */}
+                {habit.habits_types?.scheduling_rule !== 'non_calendar' && (
+                  <div className="flex items-center space-x-1 text-xs text-neutral-600">
+                    <span>{habit.duration}m</span>
                       {dailyLog?.actual_start_time &&
                         dailyLog?.actual_end_time &&
                         (editingCompletedTime === habit.id ? (
@@ -137,8 +131,8 @@ const HabitsList = ({
                             • {formatTime(dailyLog.actual_start_time)}
                           </span>
                         ))}
-                    </div>
-                  )}
+                  </div>
+                )}
                 </div>
               </div>
 
@@ -177,7 +171,7 @@ const HabitsList = ({
           </div>
         )
       })}
-    </>
+    </div>
   )
 }
 

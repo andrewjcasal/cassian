@@ -53,6 +53,28 @@ const CalendarContent = () => {
 
   const [meetingDataLoaded, setMeetingDataLoaded] = useState(false)
 
+  const [hourHeight, setHourHeight] = useState<number>(() => {
+    if (typeof window === 'undefined') return 64
+    const stored = window.localStorage.getItem('calendarHourHeight')
+    const parsed = stored ? parseInt(stored, 10) : NaN
+    return Number.isFinite(parsed) ? parsed : 64
+  })
+
+  useEffect(() => {
+    window.localStorage.setItem('calendarHourHeight', String(hourHeight))
+  }, [hourHeight])
+
+  const [dayColumnCount, setDayColumnCount] = useState<number>(() => {
+    if (typeof window === 'undefined') return 7
+    const stored = window.localStorage.getItem('calendarDayColumnCount')
+    const parsed = stored ? parseInt(stored, 10) : NaN
+    return parsed === 3 || parsed === 7 ? parsed : 7
+  })
+
+  useEffect(() => {
+    window.localStorage.setItem('calendarDayColumnCount', String(dayColumnCount))
+  }, [dayColumnCount])
+
 
   // Handle Google Calendar OAuth callback
   useEffect(() => {
@@ -118,6 +140,12 @@ const CalendarContent = () => {
   const [resizeNewEndTime, setResizeNewEndTime] = useState<Date | null>(null)
   const resizeStartYRef = useRef<number>(0)
   const resizeStartEndTimeRef = useRef<Date | null>(null)
+
+  // Meeting drag-to-move state
+  const [draggingMeeting, setDraggingMeeting] = useState<any>(null)
+  const [meetingDragY, setMeetingDragY] = useState<number>(0)
+  const meetingDragStartYRef = useRef<number>(0)
+  const meetingDragMovedRef = useRef<boolean>(false)
 
   // Task log drag state
   const [draggingTaskLog, setDraggingTaskLog] = useState<any>(null)
@@ -215,9 +243,12 @@ const CalendarContent = () => {
     moveHabitLog,
     linkMeetingHabit,
     addHabit,
+    markHabitArchived,
+    archivedHabits,
+    unarchiveHabit,
     syncTodoist,
     syncClickUp,
-  } = useCalendarData(windowWidth, baseDate)
+  } = useCalendarData(windowWidth, baseDate, hourHeight, dayColumnCount)
 
   // Calendar data already includes habits - no need for separate useHabits hook
 
@@ -227,10 +258,8 @@ const CalendarContent = () => {
   }, [habits])
 
   const gridCols =
-    windowWidth > 1350
-      ? '80px 1fr 1fr 1fr 1fr 1fr 1fr 1fr'
-      : windowWidth > 600
-      ? '80px 1fr 1fr 1fr 1fr 1fr 1fr 1fr'
+    windowWidth > 600
+      ? `80px ${Array(dayColumnCount).fill('1fr').join(' ')}`
       : '60px 1fr'
 
   // Navigation functions
@@ -328,7 +357,7 @@ const CalendarContent = () => {
     const isLateNight = currentHour >= 0 && currentHour < 5
     const currentIndex = isLateNight ? (currentHour + 18) : (currentHour - 6)
     const scrollIndex = Math.max(0, currentIndex - 3)
-    const scrollOffset = scrollIndex * 64
+    const scrollOffset = scrollIndex * hourHeight
 
     const performScroll = () => {
       if (!containerRef.current) return
@@ -393,6 +422,10 @@ const CalendarContent = () => {
   const handleEditMeeting = useCallback((meeting: Meeting) => {
     if (meetingResizedRef.current) {
       meetingResizedRef.current = false
+      return
+    }
+    if (meetingDragMovedRef.current) {
+      meetingDragMovedRef.current = false
       return
     }
     openMeetingModal(undefined, meeting)
@@ -1073,6 +1106,54 @@ const CalendarContent = () => {
     }
   }, [draggingHabit, draggingHabitDate, habitDragY, habits, tasksDailyLogs])
 
+  // Meeting drag-to-move
+  const handleMeetingDragStart = useCallback((meeting: any, e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    eventDragActiveRef.current = true
+    meetingDragMovedRef.current = false
+    setDraggingMeeting(meeting)
+    meetingDragStartYRef.current = e.clientY
+    setMeetingDragY(0)
+  }, [])
+
+  useEffect(() => {
+    if (!draggingMeeting) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const deltaY = e.clientY - meetingDragStartYRef.current
+      if (Math.abs(deltaY) > 2) meetingDragMovedRef.current = true
+      setMeetingDragY(deltaY)
+    }
+
+    const handleMouseUp = async () => {
+      const dragged = draggingMeeting
+      const deltaMin = deltaYToMinutes(meetingDragY)
+      setDraggingMeeting(null)
+      setMeetingDragY(0)
+
+      if (!dragged || deltaMin === 0) return
+
+      const newStart = new Date(new Date(dragged.start_time).getTime() + deltaMin * 60000)
+      const newEnd = new Date(new Date(dragged.end_time).getTime() + deltaMin * 60000)
+      try {
+        await updateMeeting(dragged.id, {
+          start_time: newStart.toISOString(),
+          end_time: newEnd.toISOString(),
+        })
+      } catch (err) {
+        console.error('Error moving meeting:', err)
+      }
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [draggingMeeting, meetingDragY, updateMeeting])
+
   // Render all calendar events for a time slot
   const renderCalendarEvents = useCallback(
     (timeSlot: string, date: Date) => {
@@ -1108,11 +1189,15 @@ const CalendarContent = () => {
           date={date}
           dateStr={dateStr}
           baseItemHeight={baseItemHeight}
+          hourHeight={hourHeight}
           handleHabitClick={handleHabitClick}
           handleSessionClick={handleSessionClick}
           handleTaskClick={handleTaskClick}
           handleEditMeeting={handleEditMeeting}
           onMeetingResizeStart={handleMeetingResizeStart}
+          onMeetingDragStart={handleMeetingDragStart}
+          draggingMeetingId={draggingMeeting?.id}
+          meetingDragY={meetingDragY}
           onTaskLogDragStart={handleTaskLogDragStart}
           draggingTaskLogId={draggingTaskLog?.id}
           taskLogDragY={taskLogDragY}
@@ -1145,6 +1230,7 @@ const CalendarContent = () => {
       handleHabitResizeStart,
       draggingHabit,
       habitDragY,
+      hourHeight,
     ]
   )
 
@@ -1246,6 +1332,8 @@ const CalendarContent = () => {
       deleteMeeting: handleDeleteMeeting,
       habitTimeChange: handleHabitTimeChangeWithReset,
       habitSkip: handleHabitSkipWithReset,
+      habitArchive: markHabitArchived,
+      unarchiveHabit,
       removeTask: removeTaskFromCalendar,
       removeTaskLog: removeTaskLogFromUI,
       updateMeetingEndTime: async (meetingId: string, newEndTime: string) => {
@@ -1381,6 +1469,12 @@ const CalendarContent = () => {
     onHabitSkip: async (habitId, date) => {
       await handlersRef.current.habitSkip?.(habitId, date)
     },
+    onHabitArchive: async habitId => {
+      handlersRef.current.habitArchive?.(habitId)
+    },
+    onUnarchiveHabit: async (habitId, updates) => {
+      await handlersRef.current.unarchiveHabit?.(habitId, updates)
+    },
     onUpdateSession: async () => {},
     onTaskLogCreated: () => { window.location.reload() },
     onUpdateMeetingEndTime: async (meetingId, newEndTime) => {
@@ -1414,8 +1508,8 @@ const CalendarContent = () => {
   }, [modalHandlers, registerModalHandlers])
 
   useEffect(() => {
-    setCalendarModalData({ meetingTitles, meetingCategories, habits: calendarHabits })
-  }, [meetingTitles, meetingCategories, calendarHabits, setCalendarModalData])
+    setCalendarModalData({ meetingTitles, meetingCategories, habits: calendarHabits, archivedHabits })
+  }, [meetingTitles, meetingCategories, calendarHabits, archivedHabits, setCalendarModalData])
 
   return (
     <div className="flex flex-col bg-white md:h-screen md:overflow-hidden">
@@ -1485,6 +1579,11 @@ const CalendarContent = () => {
         // otherwise the empty-state label flashes briefly before an existing
         // day note is rendered as the banner below.
         onOpenMobileDayNote={isDataLoading ? undefined : openMobileDayNote}
+        hourHeight={hourHeight}
+        setHourHeight={setHourHeight}
+        dayColumnCount={dayColumnCount}
+        setDayColumnCount={setDayColumnCount}
+        archivedHabits={archivedHabits}
       />
 
       {/* Mobile day-note banner — full-width preview of the current day's
@@ -1593,7 +1692,7 @@ const CalendarContent = () => {
           const colIdx = dayColumns.findIndex(c => c.dateStr === dateStr)
           if (colIdx === -1) return null
           const durationMin = draggingHabit.duration || 60
-          const heightPx = (durationMin / 60) * 64
+          const heightPx = (durationMin / 60) * hourHeight
           // Compute new start from original + drag delta
           const [origH, origM] = habitOriginalStartRef.current.split(':').map(Number)
           const deltaMin = deltaYToMinutes(habitDragY)
@@ -1601,9 +1700,10 @@ const CalendarContent = () => {
           const newH = Math.max(0, Math.floor(totalMin / 60))
           const hourIndex = hourToGridIndex(newH)
           const minuteFrac = (totalMin % 60) / 60
-          const topPx = (hourIndex + minuteFrac) * 64
+          const topPx = (hourIndex + minuteFrac) * hourHeight
           return { columnIndex: colIdx, topPx, heightPx }
         })() : null}
+        hourHeight={hourHeight}
       />
 
       <TaskScheduleModal

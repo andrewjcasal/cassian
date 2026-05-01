@@ -10,7 +10,7 @@ import { supabase } from '../lib/supabase'
 interface HabitDetailTabsProps {
   habitId: string
   habitName: string
-  initialTab?: 'notes' | 'subhabits' | 'settings'
+  initialTab?: 'subhabits' | 'settings'
   initialContext?: {
     background: string
     benefits: string
@@ -27,7 +27,7 @@ interface HabitDetailTabsProps {
 const HabitDetailTabs: React.FC<HabitDetailTabsProps> = ({
   habitId,
   habitName,
-  initialTab = 'notes',
+  initialTab = 'settings',
   initialContext,
   onHabitDeleted,
   showBackButton = false,
@@ -36,10 +36,12 @@ const HabitDetailTabs: React.FC<HabitDetailTabsProps> = ({
   onCompletionToggle,
   isCompleted = false,
 }) => {
-  const [activeTab, setActiveTab] = useState<'notes' | 'subhabits' | 'settings'>(initialTab)
+  const [activeTab, setActiveTab] = useState<'subhabits' | 'settings'>(initialTab)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [unsavedName, setUnsavedName] = useState<string | null>(null)
   const [unsavedStartTime, setUnsavedStartTime] = useState<string | null>(null)
+  const [unsavedDuration, setUnsavedDuration] = useState<number | null>(null)
+  const [unsavedWeeklyDays, setUnsavedWeeklyDays] = useState<string[] | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [subhabits, setSubhabits] = useState<any[]>([])
   const [aspects, setAspects] = useState<any[]>([])
@@ -60,7 +62,7 @@ const HabitDetailTabs: React.FC<HabitDetailTabsProps> = ({
   const [subhabitComments, setSubhabitComments] = useState<{[key: string]: string}>({})
   const [savingComments, setSavingComments] = useState<{[key: string]: boolean}>({})
   const commentTimeoutRefs = useRef<{[key: string]: NodeJS.Timeout}>({})
-  const { habits, updateHabitType, updateHabitDuration, updateHabitName, updateHabitDefaultStartTime, archiveHabit, deleteHabit } = useHabits()
+  const { habits, updateHabitType, updateHabitDuration, updateHabitName, updateHabitDefaultStartTime, updateHabitWeeklyDays, archiveHabit, unarchiveHabit, deleteHabit } = useHabits(undefined, { includeArchived: true })
   const { habitTypes } = useHabitTypes()
   
   const currentHabit = habits.find(h => h.id === habitId)
@@ -474,6 +476,14 @@ const HabitDetailTabs: React.FC<HabitDetailTabsProps> = ({
         await updateHabitDefaultStartTime(habitId, unsavedStartTime)
         setUnsavedStartTime(null)
       }
+      if (unsavedDuration !== null) {
+        await updateHabitDuration(habitId, unsavedDuration)
+        setUnsavedDuration(null)
+      }
+      if (unsavedWeeklyDays !== null) {
+        await updateHabitWeeklyDays(habitId, unsavedWeeklyDays)
+        setUnsavedWeeklyDays(null)
+      }
     } catch (error) {
       console.error('Error saving settings:', error)
     } finally {
@@ -481,57 +491,28 @@ const HabitDetailTabs: React.FC<HabitDetailTabsProps> = ({
     }
   }
 
-  const hasUnsavedChanges = unsavedName !== null || unsavedStartTime !== null
+  const hasUnsavedChanges =
+    unsavedName !== null ||
+    unsavedStartTime !== null ||
+    unsavedDuration !== null ||
+    unsavedWeeklyDays !== null
 
   const tabs = [
     {
-      key: 'notes' as const,
-      label: 'Notes',
+      key: 'settings' as const,
+      label: 'Settings',
     },
     {
       key: 'subhabits' as const,
       label: 'Subhabits',
     },
-    {
-      key: 'settings' as const,
-      label: 'Settings',
-    },
   ]
 
   return (
     <div className="h-full flex flex-col">
-      {/* Context Header */}
-      <div className="bg-gray-50 px-2 py-1.5 border-b border-gray-200 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {showBackButton && onBackClick && (
-              <button
-                onClick={onBackClick}
-                className="p-1 text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </button>
-            )}
-            <h2 className="text-base font-semibold text-gray-900">{habitName} Context</h2>
-          </div>
-          {showCompletionToggle && onCompletionToggle && (
-            <button
-              onClick={onCompletionToggle}
-              className="p-1 hover:bg-gray-200 rounded-full transition-colors"
-            >
-              {isCompleted ? (
-                <CheckCircle2 className="w-5 h-5 text-green-600" />
-              ) : (
-                <Circle className="w-5 h-5 text-gray-400" />
-              )}
-            </button>
-          )}
-        </div>
-      </div>
-
       {/* Tab Navigation */}
       <div className="bg-gray-50 border-b border-gray-200 flex-shrink-0">
-        <div className="flex grid grid-cols-3">
+        <div className="flex grid grid-cols-2">
           {tabs.map(tab => {
             const isActive = activeTab === tab.key
 
@@ -553,7 +534,7 @@ const HabitDetailTabs: React.FC<HabitDetailTabsProps> = ({
       </div>
 
       {/* Tab Content */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-hidden">
         {activeTab === 'settings' && (
           <div className="h-full overflow-y-auto p-2">
             <div className="space-y-2">
@@ -563,13 +544,10 @@ const HabitDetailTabs: React.FC<HabitDetailTabsProps> = ({
                   type="text"
                   value={unsavedName !== null ? unsavedName : (currentHabit?.name || habitName)}
                   onChange={e => setUnsavedName(e.target.value)}
-                  className={`w-full px-2 py-1 border rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent ${
+                  className={`w-[250px] px-2 py-1 border rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent ${
                     unsavedName !== null && unsavedName !== habitName ? 'border-yellow-400 bg-yellow-50' : 'border-gray-300'
                   }`}
                 />
-                {unsavedName !== null && unsavedName !== habitName && (
-                  <p className="text-xs text-yellow-600 mt-1">Unsaved changes</p>
-                )}
               </div>
 
               {/* Only show duration for calendar habits */}
@@ -578,9 +556,14 @@ const HabitDetailTabs: React.FC<HabitDetailTabsProps> = ({
                   <label className="block text-xs font-medium text-gray-700 mb-0.5">Duration (minutes)</label>
                   <input
                     type="number"
-                    value={currentHabit?.duration || 0}
-                    onChange={e => updateHabitDuration(habitId, parseInt(e.target.value) || 0)}
-                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+                    value={unsavedDuration !== null ? unsavedDuration : (currentHabit?.duration || 0)}
+                    onChange={e => {
+                      const next = parseInt(e.target.value) || 0
+                      setUnsavedDuration(next === (currentHabit?.duration || 0) ? null : next)
+                    }}
+                    className={`w-[250px] px-2 py-1 border rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent ${
+                      unsavedDuration !== null ? 'border-yellow-400 bg-yellow-50' : 'border-gray-300'
+                    }`}
                     placeholder="Enter duration in minutes"
                     min="0"
                   />
@@ -595,13 +578,10 @@ const HabitDetailTabs: React.FC<HabitDetailTabsProps> = ({
                     type="time"
                     value={unsavedStartTime !== null ? unsavedStartTime : (currentHabit?.default_start_time || '')}
                     onChange={e => setUnsavedStartTime(e.target.value)}
-                    className={`w-full px-2 py-1 border rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent ${
-                      hasUnsavedChanges ? 'border-yellow-400 bg-yellow-50' : 'border-gray-300'
+                    className={`w-[250px] px-2 py-1 border rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent ${
+                      unsavedStartTime !== null ? 'border-yellow-400 bg-yellow-50' : 'border-gray-300'
                     }`}
                   />
-                  {hasUnsavedChanges && (
-                    <p className="text-xs text-yellow-600 mt-1">Unsaved changes</p>
-                  )}
                 </div>
               )}
 
@@ -612,20 +592,24 @@ const HabitDetailTabs: React.FC<HabitDetailTabsProps> = ({
                   <label className="block text-xs font-medium text-gray-700 mb-1">Days (leave empty for daily)</label>
                   <div className="flex flex-wrap gap-1">
                     {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => {
-                      const isActive = (currentHabit?.weekly_days || []).includes(day)
+                      const effectiveDays =
+                        unsavedWeeklyDays !== null
+                          ? unsavedWeeklyDays
+                          : currentHabit?.weekly_days || []
+                      const isActive = effectiveDays.includes(day)
                       return (
                         <button
                           key={day}
                           type="button"
-                          onClick={async () => {
-                            const current = currentHabit?.weekly_days || []
+                          onClick={() => {
                             const updated = isActive
-                              ? current.filter((d: string) => d !== day)
-                              : [...current, day]
-                            await supabase
-                              .from('cassian_habits')
-                              .update({ weekly_days: updated.length > 0 ? updated : null })
-                              .eq('id', habitId)
+                              ? effectiveDays.filter((d: string) => d !== day)
+                              : [...effectiveDays, day]
+                            const saved = currentHabit?.weekly_days || []
+                            const sameAsSaved =
+                              updated.length === saved.length &&
+                              updated.every((d: string) => saved.includes(d))
+                            setUnsavedWeeklyDays(sameAsSaved ? null : updated)
                           }}
                           className={`px-2 py-0.5 text-xs rounded transition-colors ${
                             isActive
@@ -656,34 +640,52 @@ const HabitDetailTabs: React.FC<HabitDetailTabsProps> = ({
 
               {/* Archive Habit Section */}
               <div className="pt-2 border-t border-gray-200">
-                <div className="space-y-1">
-                  <h4 className="text-xs font-medium text-gray-700">Archive</h4>
-                  <p className="text-xs text-gray-600">
-                    Archive this habit to hide it from your daily list. You can restore it later.
-                  </p>
-                  <button
-                    onClick={handleArchiveHabit}
-                    className="flex items-center gap-1 px-2 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors text-xs"
-                  >
-                    <Archive className="w-3 h-3" />
-                    Archive Habit
-                  </button>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <h4 className="text-xs font-medium text-gray-700">
+                      {currentHabit?.is_archived ? 'Unarchive' : 'Archive'}
+                    </h4>
+                    <p className="text-xs text-gray-600">
+                      {currentHabit?.is_archived
+                        ? 'Restore this habit so it shows up in your daily list again.'
+                        : 'Archive this habit to hide it from your daily list. You can restore it later.'}
+                    </p>
+                  </div>
+                  {currentHabit?.is_archived ? (
+                    <button
+                      onClick={async () => {
+                        await unarchiveHabit(habitId)
+                        onHabitDeleted?.()
+                      }}
+                      className="flex-shrink-0 px-2 py-1 bg-amber-500 text-white rounded hover:bg-amber-600 transition-colors text-xs"
+                    >
+                      Unarchive Habit
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleArchiveHabit}
+                      className="flex-shrink-0 px-2 py-1 bg-amber-500 text-white rounded hover:bg-amber-600 transition-colors text-xs"
+                    >
+                      Archive Habit
+                    </button>
+                  )}
                 </div>
               </div>
 
               {/* Delete Habit Section */}
               <div className="pt-2 border-t border-gray-200">
-                <div className="space-y-1">
-                  <h4 className="text-xs font-medium text-red-700">Danger Zone</h4>
-                  <p className="text-xs text-gray-600">
-                    Once you delete a habit, there is no going back. This will hide the habit and all its data.
-                  </p>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <h4 className="text-xs font-medium text-red-700">Danger Zone</h4>
+                    <p className="text-xs text-gray-600">
+                      Once you delete a habit, there is no going back. This will hide the habit and all its data.
+                    </p>
+                  </div>
                   {!showDeleteConfirm ? (
                     <button
                       onClick={() => setShowDeleteConfirm(true)}
-                      className="flex items-center gap-1 px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-xs"
+                      className="flex-shrink-0 px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-xs"
                     >
-                      <Trash2 className="w-3 h-3" />
                       Delete Habit
                     </button>
                   ) : (
@@ -709,72 +711,6 @@ const HabitDetailTabs: React.FC<HabitDetailTabsProps> = ({
                   )}
                 </div>
               </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'notes' && (
-          <div className="h-full overflow-y-auto p-2">
-            <div className="space-y-4">
-              {/* Notes list */}
-              {aspectNotes.length === 0 ? (
-                <div className="text-center py-4 text-gray-500">
-                  <FileText className="w-6 h-6 mx-auto mb-2 opacity-50" />
-                  <p className="text-xs">No related notes found</p>
-                  <p className="text-xs opacity-75">Notes will appear here when they're connected to aspects used by this habit's subhabits</p>
-                </div>
-              ) : (
-                (() => {
-                  // Group notes by aspect
-                  const notesByAspect = aspectNotes.reduce((acc: any, note: any) => {
-                    const aspectTitle = note.aspect_title || 'Unknown'
-                    if (!acc[aspectTitle]) {
-                      acc[aspectTitle] = []
-                    }
-                    acc[aspectTitle].push(note)
-                    return acc
-                  }, {})
-
-                  return Object.entries(notesByAspect).map(([aspectTitle, notes]: [string, any]) => (
-                    <div key={aspectTitle}>
-                      <h3 className="text-xs font-medium text-gray-700 mb-3">Related to {aspectTitle}</h3>
-                      <div className="space-y-3 ml-2">
-                        {notes.map((note: any) => (
-                          <div key={note.id} className="group">
-                            <div className="flex items-baseline gap-1 mb-1">
-                              {note.created_at && (
-                                <span className="text-xs text-gray-400">
-                                  {new Date(note.created_at).toLocaleDateString('en-US', {
-                                    month: 'short',
-                                    day: 'numeric',
-                                    hour: 'numeric',
-                                    minute: '2-digit'
-                                  })}
-                                </span>
-                              )}
-                              {note.title && (
-                                <div className="flex items-center gap-1">
-                                  <h4 className="text-sm font-medium text-gray-900">{note.title}</h4>
-                                  <button
-                                    onClick={() => {
-                                      navigate(`/notes?noteId=${note.id}`)
-                                    }}
-                                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-100 rounded transition-opacity"
-                                    title="Edit note"
-                                  >
-                                    <Edit2 className="w-2 h-2 text-gray-400 hover:text-gray-600" />
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                            <p className="text-xs text-gray-700 leading-relaxed mb-2">{note.content}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))
-                })()
-              )}
             </div>
           </div>
         )}

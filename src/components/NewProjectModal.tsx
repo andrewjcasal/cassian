@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react'
-import { FolderOpen } from 'lucide-react'
 import { Project } from '../types'
 import ModalWrapper from './ModalWrapper'
 
@@ -52,12 +51,7 @@ const NewProjectModal = ({
     }
   }
 
-  const titleNode = (
-    <div className="flex items-center gap-1.5">
-      <FolderOpen className="w-3.5 h-3.5 text-primary-600" />
-      <h2 className="text-sm font-semibold text-neutral-900">New Project</h2>
-    </div>
-  )
+  const titleNode = <h2 className="text-sm font-semibold text-neutral-900">New Project</h2>
 
   return (
     <ModalWrapper isOpen={isOpen} onClose={onClose} title={titleNode} maxWidth="sm">

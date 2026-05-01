@@ -16,11 +16,19 @@ export const fetchAllCalendarData = async (userId: string) => {
 
   try {
     // Fetch all data sources in parallel with timeout protection
-    const [habitsResult, sessionsResult, projectsResult, meetingsResult, tasksDailyLogsResult, tasksResult, settingsResult, calendarNotesResult, habitNotesResult, categoryBuffersResult] = await Promise.allSettled([
+    const [habitsResult, archivedHabitsWithLogsResult, archivedHabitsListResult, sessionsResult, projectsResult, meetingsResult, tasksDailyLogsResult, tasksResult, settingsResult, calendarNotesResult, habitNotesResult, categoryBuffersResult] = await Promise.allSettled([
       // Top-level habits only. Subhabits (parent_habit_id IS NOT NULL) are
       // fetched separately below and merged in — PostgREST can be fussy about
       // self-referencing embeds, so we avoid that hint here.
       withTimeout(supabase.from('cassian_habits').select('*, habits_daily_logs:cassian_habits_daily_logs(*), habits_types:cassian_habits_types(*), habit_todoist_tasks:cassian_habit_todoist_tasks(*)').eq('user_id', userId).eq('is_visible', true).is('parent_habit_id', null).or('is_archived.eq.false,is_archived.is.null')),
+      // Archived habits stay on the calendar for any date that already has a
+      // daily-log entry, so past completions don't disappear when a habit is
+      // hidden. !inner returns only archived habits with at least one log.
+      withTimeout(supabase.from('cassian_habits').select('*, habits_daily_logs:cassian_habits_daily_logs!inner(*), habits_types:cassian_habits_types(*), habit_todoist_tasks:cassian_habit_todoist_tasks(*)').eq('user_id', userId).eq('is_visible', true).is('parent_habit_id', null).eq('is_archived', true)),
+      // Lightweight list of every archived top-level habit, used to populate
+      // the "Archived" dropdown in the calendar top bar and the
+      // archived-habits picker in MeetingModal.
+      withTimeout(supabase.from('cassian_habits').select('id, name, duration, default_start_time, weekly_days').eq('user_id', userId).eq('is_visible', true).is('parent_habit_id', null).eq('is_archived', true).order('name')),
       withTimeout(supabase.from('cassian_sessions').select('*, projects:cassian_projects(*)').eq('user_id', userId)),
       withTimeout(supabase.from('cassian_projects').select('*').eq('user_id', userId).neq('status', 'archived')),
       withTimeout(supabase.from('cassian_meetings').select('*, meeting_habits:cassian_meeting_habits(habit_id)').eq('user_id', userId).or('is_ignored.is.null,is_ignored.eq.false')),
@@ -37,13 +45,16 @@ export const fetchAllCalendarData = async (userId: string) => {
 
     // Extract data with fallbacks
     const topLevelHabits = habitsResult.status === 'fulfilled' ? (habitsResult.value.data || []) : []
+    const archivedWithLogs = archivedHabitsWithLogsResult.status === 'fulfilled' ? (archivedHabitsWithLogsResult.value.data || []) : []
+    const archivedHabitsList = archivedHabitsListResult.status === 'fulfilled' ? (archivedHabitsListResult.value.data || []) : []
+    const allTopLevel = [...topLevelHabits, ...archivedWithLogs]
 
     // Second-pass: pull subhabits (children of the habits we just fetched) and
     // attach them under `habit.subhabits` so downstream code sees the same shape
     // it did before the subhabits→habits merge.
-    let habits = topLevelHabits
-    if (topLevelHabits.length > 0) {
-      const parentIds = topLevelHabits.map((h: any) => h.id)
+    let habits = allTopLevel
+    if (allTopLevel.length > 0) {
+      const parentIds = allTopLevel.map((h: any) => h.id)
       const { data: subhabitRows } = await supabase
         .from('cassian_habits')
         .select('id, parent_habit_id, name, duration, sort_order, aspect_id, created_at, habits_daily_logs:cassian_habits_daily_logs(*)')
@@ -54,7 +65,7 @@ export const fetchAllCalendarData = async (userId: string) => {
         arr.push(s)
         byParent.set(s.parent_habit_id, arr)
       }
-      habits = topLevelHabits.map((h: any) => ({
+      habits = allTopLevel.map((h: any) => ({
         ...h,
         subhabits: byParent.get(h.id) || [],
       }))
@@ -89,11 +100,11 @@ export const fetchAllCalendarData = async (userId: string) => {
 
     
 
-    return { habits, sessions, projects, meetings, tasksDailyLogs, tasks, settings, calendarNotes, habitNotes, categoryBuffers }
+    return { habits, archivedHabitsList, sessions, projects, meetings, tasksDailyLogs, tasks, settings, calendarNotes, habitNotes, categoryBuffers }
   } catch (error) {
     console.error('Critical error fetching calendar data:', error)
     // Return minimal data to prevent complete failure
-    return { habits: [], sessions: [], projects: [], meetings: [], tasksDailyLogs: [], tasks: [], settings: null, calendarNotes: [], habitNotes: [], categoryBuffers: [] }
+    return { habits: [], archivedHabitsList: [], sessions: [], projects: [], meetings: [], tasksDailyLogs: [], tasks: [], settings: null, calendarNotes: [], habitNotes: [], categoryBuffers: [] }
   }
 }
 

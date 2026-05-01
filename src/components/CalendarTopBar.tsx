@@ -12,6 +12,8 @@ import {
   Sun,
   Settings,
   Menu,
+  Minimize2,
+  Maximize2,
 } from 'lucide-react'
 import CalendarSettingsPanel from './CalendarSettingsPanel'
 import { useModal } from '../contexts/useModal'
@@ -43,6 +45,11 @@ interface CalendarTopBarProps {
   mobileDayLabel?: string
   mobileDayNotePreview?: string | null
   onOpenMobileDayNote?: () => void
+  hourHeight?: number
+  setHourHeight?: (height: number) => void
+  dayColumnCount?: number
+  setDayColumnCount?: (count: number) => void
+  archivedHabits?: { id: string; name: string }[]
 }
 
 export default function CalendarTopBar({
@@ -72,6 +79,11 @@ export default function CalendarTopBar({
   mobileDayLabel,
   mobileDayNotePreview,
   onOpenMobileDayNote,
+  hourHeight = 64,
+  setHourHeight,
+  dayColumnCount = 7,
+  setDayColumnCount,
+  archivedHabits = [],
 }: CalendarTopBarProps) {
   const { openNeedHelpModal } = useModal()
   const showBar = settings ? (settings.metadata?.showWorkHoursBar ?? true) : false
@@ -97,14 +109,14 @@ export default function CalendarTopBar({
           className="hidden sm:block hover:bg-neutral-200 rounded transition-colors"
           title="Go back 5 days"
         >
-          <ChevronsLeft className="w-2 h-2 text-neutral-600" />
+          <ChevronsLeft className="w-3 h-3 text-neutral-600" />
         </button>
         <button
           onClick={navigateBackDay}
           className="hover:bg-neutral-200 rounded transition-colors"
           title="Go back 1 day"
         >
-          <ChevronLeft className="w-4 h-4 sm:w-2 sm:h-2 text-neutral-600" />
+          <ChevronLeft className="w-4 h-4 sm:w-3 sm:h-3 text-neutral-600" />
         </button>
         {mobileDayLabel && (
           <button
@@ -120,21 +132,21 @@ export default function CalendarTopBar({
           className="hidden md:block hover:bg-neutral-200 rounded transition-colors mx-1"
           title="Go to today"
         >
-          <Sun className="w-2 h-2 text-yellow-600" />
+          <Sun className="w-3 h-3 text-yellow-600" />
         </button>
         <button
           onClick={navigateForwardDay}
           className="hover:bg-neutral-200 rounded transition-colors"
           title="Go forward 1 day"
         >
-          <ChevronRight className="w-4 h-4 sm:w-2 sm:h-2 text-neutral-600" />
+          <ChevronRight className="w-4 h-4 sm:w-3 sm:h-3 text-neutral-600" />
         </button>
         <button
           onClick={navigateForwardWeek}
           className="hidden sm:block hover:bg-neutral-200 rounded transition-colors"
           title="Go forward 5 days"
         >
-          <ChevronsRight className="w-2 h-2 text-neutral-600" />
+          <ChevronsRight className="w-3 h-3 text-neutral-600" />
         </button>
 
         {/* Mobile "add note" affordance — shown only when no day note exists.
@@ -382,6 +394,49 @@ export default function CalendarTopBar({
 
       {/* Calendar Settings Gear + Mobile Hamburger */}
       <div className="relative ml-2 flex items-center gap-1">
+        {setDayColumnCount && (
+          <select
+            value={dayColumnCount}
+            onChange={e => setDayColumnCount(parseInt(e.target.value, 10))}
+            className="hidden md:block bg-transparent text-xs text-neutral-600 hover:bg-neutral-200 rounded px-1 py-0.5 border-0 focus:outline-none focus:ring-1 focus:ring-neutral-300 cursor-pointer"
+            title="Days visible"
+            aria-label="Days visible"
+          >
+            <option value={3}>3 days</option>
+            <option value={7}>7 days</option>
+          </select>
+        )}
+        <select
+          value=""
+          onChange={() => {}}
+          disabled={archivedHabits.length === 0}
+          className="hidden md:block bg-transparent text-xs text-neutral-600 hover:bg-neutral-200 rounded px-1 py-0.5 border-0 focus:outline-none focus:ring-1 focus:ring-neutral-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed max-w-[140px]"
+          title="Hidden habits"
+          aria-label="Hidden habits"
+        >
+          <option value="">
+            {archivedHabits.length === 0 ? 'No hidden' : `Hidden (${archivedHabits.length})`}
+          </option>
+          {archivedHabits.map(h => (
+            <option key={h.id} value={h.id}>
+              {h.name}
+            </option>
+          ))}
+        </select>
+        {setHourHeight && (
+          <button
+            onClick={() => setHourHeight(hourHeight >= 80 ? 64 : 80)}
+            className="hidden md:block p-0.5 hover:bg-neutral-200 rounded transition-colors text-neutral-500"
+            title={hourHeight >= 80 ? 'Compact rows' : 'Expand rows'}
+            aria-label={hourHeight >= 80 ? 'Compact rows' : 'Expand rows'}
+          >
+            {hourHeight >= 80 ? (
+              <Minimize2 className="w-2.5 h-2.5" />
+            ) : (
+              <Maximize2 className="w-2.5 h-2.5" />
+            )}
+          </button>
+        )}
         <button
           onClick={() => setShowCalendarSettings(!showCalendarSettings)}
           className="hidden md:block p-0.5 hover:bg-neutral-200 rounded transition-colors"

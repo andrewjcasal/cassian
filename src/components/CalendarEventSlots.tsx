@@ -20,8 +20,8 @@ const getEventStyle = (
   leftOffset: number = 0,
   widthFraction: number = 1
 ): React.CSSProperties => ({
-  left: `${leftOffset}%`,
-  width: `calc(${93 * widthFraction}% - 2px)`,
+  left: `calc(${leftOffset}% + 2px)`,
+  width: `calc(${93 * widthFraction}% - 4px)`,
   top: `${topPosition}%`,
   height: `${height - 2}px`, // Reduce height by 2px for separation
   zIndex,
@@ -39,11 +39,15 @@ interface CalendarEventSlotsProps {
   date: Date
   dateStr: string
   baseItemHeight: number
+  hourHeight?: number
   handleHabitClick: (habit: any, date: Date) => void
   handleSessionClick: (session: any) => void
   handleTaskClick: (task: any) => void
   handleEditMeeting: (meeting: any) => void
   onMeetingResizeStart?: (meeting: any, e: React.MouseEvent) => void
+  onMeetingDragStart?: (meeting: any, e: React.MouseEvent) => void
+  draggingMeetingId?: string | null
+  meetingDragY?: number
   onTaskLogDragStart?: (log: any, e: React.MouseEvent) => void
   draggingTaskLogId?: string | null
   taskLogDragY?: number
@@ -66,11 +70,15 @@ function CalendarEventSlots({
   date,
   dateStr,
   baseItemHeight,
+  hourHeight = 64,
   handleHabitClick,
   handleSessionClick,
   handleTaskClick,
   handleEditMeeting,
   onMeetingResizeStart,
+  onMeetingDragStart,
+  draggingMeetingId,
+  meetingDragY = 0,
   onTaskLogDragStart,
   draggingTaskLogId,
   taskLogDragY = 0,
@@ -87,7 +95,7 @@ function CalendarEventSlots({
         // Calculate effective duration (daily log override or default habit duration)
         const dailyLog = habit.habits_daily_logs?.find(log => log.log_date === dateStr)
         const effectiveDuration = dailyLog?.duration || habit.duration || 0
-        const habitHeight = effectiveDuration ? (effectiveDuration / 60) * 64 : 64
+        const habitHeight = effectiveDuration ? (effectiveDuration / 60) * hourHeight : hourHeight
         const isRescheduled = habit.isRescheduled || false
 
         const adjustedTopPosition = habit.topPosition || 0
@@ -148,12 +156,12 @@ function CalendarEventSlots({
 
       {/* Sessions */}
       {sessionsInSlot.map((session, index) => {
-        const sessionHeight = session.scheduled_hours * 64
+        const sessionHeight = session.scheduled_hours * hourHeight
 
         // Calculate position after habits
         const baseTopPosition = session.topPosition || 0
         const verticalOffset = (habitsInSlot.length + index) * baseItemHeight
-        const adjustedTopPosition = baseTopPosition + (verticalOffset / 64) * 100
+        const adjustedTopPosition = baseTopPosition + (verticalOffset / hourHeight) * 100
 
         return (
           <CalendarEvent
@@ -179,7 +187,7 @@ function CalendarEventSlots({
         const minutesIntoHour = (taskStartTime - currentHour) * 60
         let topPositionInSlot = (minutesIntoHour / 60) * 100
 
-        const taskHeight = (task.estimated_hours || 1) * 64
+        const taskHeight = (task.estimated_hours || 1) * hourHeight
         const isPlaceholder = task.isPlaceholder || false
 
         const finalStyle = getEventStyle(topPositionInSlot, taskHeight, 5)
@@ -229,20 +237,26 @@ function CalendarEventSlots({
           topPositionInSlot = (meetingStart.getMinutes() / 60) * 100
         }
 
-        const meetingHeight = (meetingDuration / 60) * 64
+        const meetingHeight = (meetingDuration / 60) * hourHeight
+        const isDraggingThisMeeting = draggingMeetingId === meeting.id && !isClipped
+        const baseMeetingStyle = {
+          ...getEventStyle(topPositionInSlot, meetingHeight, 15),
+          ...(meeting.meeting_habits?.length > 0 ? { backgroundColor: '#dcfce7', color: '#166534' } : {}),
+        }
+        const meetingStyle = isDraggingThisMeeting
+          ? { ...baseMeetingStyle, transform: `translateY(${meetingDragY}px)`, opacity: 0.8, zIndex: 50 }
+          : baseMeetingStyle
 
         return (
           <CalendarEvent
             key={`meeting-${meeting.id}${isClipped ? '-clipped' : ''}`}
             type="meeting"
-            style={{
-              ...getEventStyle(topPositionInSlot, meetingHeight, 15),
-              ...(meeting.meeting_habits?.length > 0 ? { backgroundColor: '#dcfce7', color: '#166534' } : {}),
-            }}
+            style={meetingStyle}
             onClick={e => {
               e.stopPropagation()
               handleEditMeeting(meeting)
             }}
+            onDragStart={!isClipped && onMeetingDragStart ? (e) => onMeetingDragStart(meeting, e) : undefined}
             onResizeStart={onMeetingResizeStart ? (e) => onMeetingResizeStart(meeting, e) : undefined}
             eventTitle={meeting.title}
             icon={meeting.meeting_habits?.length > 0 ? <Check className="w-2 h-2" /> : undefined}
@@ -255,7 +269,7 @@ function CalendarEventSlots({
       {tasksDailyLogsInSlot.map(log => {
         // Use actual_duration if available, otherwise fall back to scheduled_duration
         const duration = log.estimated_hours || 1
-        const logHeight = duration * 64
+        const logHeight = duration * hourHeight
 
         const todayStr = new Date().toLocaleDateString('en-CA')
         const isDatedTodoist = log.tasks?.source === 'todoist' && log.tasks?.due_date
@@ -285,7 +299,7 @@ function CalendarEventSlots({
 
       {/* Buffer Time (Daily Buffers) */}
       {buffersInSlot.map(buffer => {
-        const bufferHeight = (buffer.duration / 60) * 64
+        const bufferHeight = (buffer.duration / 60) * hourHeight
 
         return (
           <CalendarEvent
@@ -303,7 +317,7 @@ function CalendarEventSlots({
 
       {/* Category Buffers (Weekly Buffers) */}
       {categoryBuffersInSlot.map(categoryBuffer => {
-        const bufferHeight = categoryBuffer.duration * 64 // Duration is in hours
+        const bufferHeight = categoryBuffer.duration * hourHeight // Duration is in hours
 
         return (
           <CalendarEvent

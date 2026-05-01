@@ -48,7 +48,15 @@ export interface ModalState {
 
   // Create Habit modal
   showCreateHabitModal: boolean
-  createHabitDefaults: { time?: string; duration?: number; weeklyDays?: string[] } | null
+  createHabitDefaults: CreateHabitDefaults | null
+}
+
+export interface CreateHabitDefaults {
+  time?: string
+  duration?: number
+  weeklyDays?: string[]
+  lockedName?: string
+  existingHabitId?: string
 }
 
 export interface CalendarModalHandlers {
@@ -62,6 +70,11 @@ export interface CalendarModalHandlers {
   ) => Promise<void>
   onHabitTimeChange?: (habitId: string, date: string, newTime: string, newDuration?: number) => Promise<void>
   onHabitSkip?: (habit: any, date: Date) => Promise<void>
+  onHabitArchive?: (habitId: string) => Promise<void>
+  onUnarchiveHabit?: (
+    habitId: string,
+    updates: { duration: number; default_start_time: string; weekly_days: string[] | null }
+  ) => Promise<void>
   onUpdateSession?: (sessionId: string, updates: any) => Promise<void>
   onTaskLogCreated?: () => void
   onUpdateMeetingEndTime?: (meetingId: string, newEndTime: string) => Promise<void>
@@ -86,6 +99,13 @@ export interface CalendarModalData {
   meetingTitles?: { title: string; count: number; lastUsed: Date }[]
   meetingCategories?: { id: string; name: string; color: string }[]
   habits?: any[]
+  archivedHabits?: {
+    id: string
+    name: string
+    duration: number | null
+    default_start_time: string | null
+    weekly_days: string[] | null
+  }[]
 }
 
 export interface ModalActions {
@@ -113,7 +133,7 @@ export interface ModalActions {
   openNeedHelpModal: () => void
   closeNeedHelpModal: () => void
 
-  openCreateHabitModal: (defaults?: { time?: string; duration?: number; weeklyDays?: string[] }) => void
+  openCreateHabitModal: (defaults?: CreateHabitDefaults) => void
   closeCreateHabitModal: () => void
 
   registerModalHandlers: (handlers: CalendarModalHandlers) => void

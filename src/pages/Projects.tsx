@@ -1,12 +1,11 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Settings, Folder, Zap, Info, Crown, Calendar } from 'lucide-react'
+import { Settings, Folder, Zap, Info, Crown, Calendar, Plus, ArrowLeft } from 'lucide-react'
 import { useProjects, usePublicTasks } from '../hooks/useProjects'
 import { usePublicSessions } from '../hooks/useContracts'
 import { useProjectsPageData } from '../hooks/useProjectsPageData'
 import { Project, Task } from '../types'
 import { supabase } from '../lib/supabase'
-import ProjectDropdown from '../components/ProjectDropdown'
 import NewProjectModal from '../components/NewProjectModal'
 import NewSessionModal from '../components/NewSessionModal'
 import ProjectSettingsModal from '../components/ProjectSettingsModal'
@@ -78,18 +77,13 @@ const Projects = () => {
   const [showProjectSettings, setShowProjectSettings] = useState(false)
   const [showDayView, setShowDayView] = useState(false)
   const [showTaskModal, setShowTaskModal] = useState(false)
-  const [showProjectDropdown, setShowProjectDropdown] = useState(false)
 
   // Selected items
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [activeSessionTab, setActiveSessionTab] = useState<'past' | 'upcoming'>('upcoming')
 
-  const dropdownRef = useRef<HTMLDivElement>(null)
-
   const handleProjectSelect = useCallback(
     (project: Project | null) => {
-      setShowProjectDropdown(false)
-
       if (project) {
         // Update URL query param first
         setSearchParams({ project: project.name })
@@ -453,23 +447,6 @@ const Projects = () => {
     []
   )
 
-  // Handle dropdown clicks outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowProjectDropdown(false)
-      }
-    }
-
-    if (showProjectDropdown) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [showProjectDropdown])
-
   // Update selectedTask when tasks change
   useEffect(() => {
     if (selectedTask && currentTasks.length > 0) {
@@ -510,34 +487,29 @@ const Projects = () => {
 
   const ProjectContent = () => (
     <div className="flex flex-col h-screen bg-white overflow-hidden max-w-full">
-      {/* Top Navigation - only show for authenticated users */}
-      {user && (
+      {/* Top Navigation - only show for authenticated users when a project is selected */}
+      {user && selectedProject && (
         <nav className="border-b border-neutral-200 bg-white flex items-center flex-shrink-0">
           <div className="flex items-center gap-2 min-w-0">
-            <ProjectDropdown
-              ref={dropdownRef}
-              selectedProject={selectedProject}
-              projects={projects}
-              projectsLoading={projectsLoading}
-              showDropdown={showProjectDropdown}
-              onToggleDropdown={() => setShowProjectDropdown(!showProjectDropdown)}
-              onProjectSelect={(project: Project) => handleProjectSelect(project)}
-              onShowNewProjectForm={() => setShowNewProjectForm(true)}
-            />
-
-            {/* Project Settings Button */}
-            {selectedProject && (
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setShowProjectSettings(true)}
-                  className="flex items-center gap-1 px-2 py-0.5 my-0.5 text-sm text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 rounded transition-colors"
-                >
-                  <Settings className="w-2.5 h-2.5" />
-                  <span>Project Settings</span>
-                </button>
-
-              </div>
-            )}
+            <button
+              onClick={() => handleProjectSelect(null)}
+              className="flex items-center gap-1 px-2 py-1 text-sm text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 border-r border-neutral-200 transition-colors"
+            >
+              <ArrowLeft className="w-3 h-3" />
+              <span>All projects</span>
+            </button>
+            <span className="text-sm font-medium text-neutral-900 truncate">
+              {selectedProject.name}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setShowProjectSettings(true)}
+                className="flex items-center gap-1 px-2 py-0.5 my-0.5 text-sm text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 rounded transition-colors"
+              >
+                <Settings className="w-2.5 h-2.5" />
+                <span>Project Settings</span>
+              </button>
+            </div>
           </div>
         </nav>
       )}
@@ -644,14 +616,61 @@ const Projects = () => {
               onUpdateTask={user ? updateTask : undefined}
             />
           </div>
+        ) : user ? (
+          <div className="flex-1 overflow-y-auto px-6 py-8 bg-[#FDFBF7]">
+            <div className="max-w-4xl mx-auto">
+              <div className="flex items-baseline justify-between mb-6">
+                <h1 className="font-serif text-3xl text-neutral-900">Projects</h1>
+                <span className="text-sm text-neutral-500">
+                  {projects.length} {projects.length === 1 ? 'project' : 'projects'}
+                </span>
+              </div>
+
+              {projectsLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {projects.map(project => (
+                    <button
+                      key={project.id}
+                      onClick={() => handleProjectSelect(project)}
+                      className="group text-left bg-white border border-neutral-200 hover:border-amber-400 hover:shadow-md rounded-lg p-5 transition-all"
+                    >
+                      <h3 className="font-serif text-lg text-neutral-900 truncate">
+                        {project.name}
+                      </h3>
+                      {project.description ? (
+                        <p className="text-sm text-neutral-600 mt-1 line-clamp-2">
+                          {project.description}
+                        </p>
+                      ) : (
+                        <p className="text-sm text-neutral-400 mt-1 italic">No description</p>
+                      )}
+                    </button>
+                  ))}
+
+                  <button
+                    onClick={() => setShowNewProjectForm(true)}
+                    className="text-left border border-dashed border-neutral-300 hover:border-amber-400 hover:bg-white rounded-lg p-5 transition-all flex items-center gap-3 text-neutral-500 hover:text-neutral-900"
+                  >
+                    <div className="w-9 h-9 flex items-center justify-center rounded-md bg-white border border-neutral-200 flex-shrink-0">
+                      <Plus className="w-4 h-4" />
+                    </div>
+                    <span className="font-medium text-sm">New project</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         ) : (
           <div className="flex-1 flex items-center justify-center text-neutral-500">
             <div className="text-center">
               <div className="mb-4">
                 <Folder className="w-16 h-16 mx-auto text-neutral-300" />
               </div>
-              <h3 className="text-lg font-medium mb-2">Select a project to start working</h3>
-              <p className="text-sm">Choose a project from the dropdown above</p>
+              <h3 className="text-lg font-medium mb-2">No project</h3>
             </div>
           </div>
         )}

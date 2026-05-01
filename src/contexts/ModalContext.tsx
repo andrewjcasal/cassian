@@ -14,6 +14,7 @@ import {
   ModalContextType,
   CalendarModalHandlers,
   CalendarModalData,
+  type CreateHabitDefaults,
 } from './useModal'
 
 const initialModalState: ModalState = {
@@ -296,7 +297,7 @@ export const ModalProvider = ({ children }: { children: ReactNode }) => {
     setModalState(prev => ({ ...prev, showNeedHelpModal: false }))
   }
 
-  const openCreateHabitModal = (defaults?: { time?: string; duration?: number; weeklyDays?: string[] }) => {
+  const openCreateHabitModal = (defaults?: CreateHabitDefaults) => {
     setModalState(prev => ({
       ...getClosedModalState(prev),
       showCreateHabitModal: true,
@@ -352,6 +353,7 @@ export const ModalProvider = ({ children }: { children: ReactNode }) => {
         previousTitles={calendarData.meetingTitles}
         categories={calendarData.meetingCategories}
         calendarHabits={calendarData.habits}
+        archivedHabits={calendarData.archivedHabits}
       />
       <CreateHabitModal
         isOpen={modalState.showCreateHabitModal}
@@ -359,11 +361,14 @@ export const ModalProvider = ({ children }: { children: ReactNode }) => {
         defaultTime={modalState.createHabitDefaults?.time}
         defaultDuration={modalState.createHabitDefaults?.duration}
         defaultWeeklyDays={modalState.createHabitDefaults?.weeklyDays}
+        lockedName={modalState.createHabitDefaults?.lockedName}
+        existingHabitId={modalState.createHabitDefaults?.existingHabitId}
         onCreateHabit={async habitData => {
           if (handlersRef.current.onCreateHabit) {
             await handlersRef.current.onCreateHabit(habitData)
           }
         }}
+        onUnarchive={handlers.onUnarchiveHabit}
       />
       <CalendarTaskModal
         isOpen={modalState.showTaskModal}
@@ -376,6 +381,7 @@ export const ModalProvider = ({ children }: { children: ReactNode }) => {
       <HabitModal
         onTimeChange={handlers.onHabitTimeChange ?? (async () => {})}
         onSkip={handlers.onHabitSkip ?? (async () => {})}
+        onArchive={handlers.onHabitArchive}
       />
       {modalState.selectedSession && (
         <SessionEditModal

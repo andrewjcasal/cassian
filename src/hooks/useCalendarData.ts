@@ -32,10 +32,17 @@ const TODOIST_WEEKEND_HOURS = { start: 10, end: 23 }
 // ClickUp tasks = work tasks; weekdays only (skip Sat/Sun entirely).
 const CLICKUP_WORK_HOURS = { start: 11, end: 18 }
 
-export const useCalendarData = (windowWidth: number, baseDate: Date = new Date()) => {
+export const useCalendarData = (windowWidth: number, baseDate: Date = new Date(), hourHeight: number = 64, dayColumnCount: number = 7) => {
   const { user, loading: userLoading } = useUserContext()
   const [allTasks, setAllTasks] = useState<any[]>([])
   const [habits, setHabits] = useState<any[]>([])
+  const [archivedHabits, setArchivedHabits] = useState<{
+    id: string
+    name: string
+    duration: number | null
+    default_start_time: string | null
+    weekly_days: string[] | null
+  }[]>([])
   const [sessions, setSessions] = useState<any[]>([])
   const [projects, setProjects] = useState<any[]>([])
   const [meetings, setMeetings] = useState<any[]>([])
@@ -111,7 +118,7 @@ export const useCalendarData = (windowWidth: number, baseDate: Date = new Date()
 
         // Step 1: Fetch all base data in parallel and update UI immediately
         const dataPromise = fetchAllCalendarData(user.id)
-        const { habits: fetchedHabits, sessions: fetchedSessions, projects: fetchedProjects, meetings: fetchedMeetings, tasksDailyLogs: fetchedTasksDailyLogs, tasks: fetchedTasks, settings: fetchedSettings, calendarNotes: fetchedCalendarNotes, habitNotes: fetchedHabitNotes, categoryBuffers: fetchedCategoryBuffers } = await dataPromise
+        const { habits: fetchedHabits, archivedHabitsList: fetchedArchivedHabits, sessions: fetchedSessions, projects: fetchedProjects, meetings: fetchedMeetings, tasksDailyLogs: fetchedTasksDailyLogs, tasks: fetchedTasks, settings: fetchedSettings, calendarNotes: fetchedCalendarNotes, habitNotes: fetchedHabitNotes, categoryBuffers: fetchedCategoryBuffers } = await dataPromise
 
         if (cancelled) return
 
@@ -125,6 +132,7 @@ export const useCalendarData = (windowWidth: number, baseDate: Date = new Date()
 
         if (cancelled) return
         setHabits(fetchedHabits)
+        setArchivedHabits(fetchedArchivedHabits || [])
         setSessions(fetchedSessions)
         setProjects(fetchedProjects)
         setMeetings(fetchedMeetings)
@@ -219,7 +227,7 @@ export const useCalendarData = (windowWidth: number, baseDate: Date = new Date()
     const tomorrowStr = format(addDays(today, 1), 'yyyy-MM-dd')
     const yesterdayStr = format(addDays(today, -1), 'yyyy-MM-dd')
 
-    const columnCount = windowWidth > 600 ? 7 : 1
+    const columnCount = windowWidth > 600 ? dayColumnCount : 1
 
     return Array.from({ length: columnCount }, (_, i) => {
       const date = addDays(baseDate, i)
@@ -240,7 +248,7 @@ export const useCalendarData = (windowWidth: number, baseDate: Date = new Date()
 
       return { date, label, dateStr }
     })
-  }, [baseDate, windowWidth])
+  }, [baseDate, windowWidth, dayColumnCount])
 
 
   const getDayColumns = () => {
@@ -282,7 +290,7 @@ export const useCalendarData = (windowWidth: number, baseDate: Date = new Date()
 
     const hourIndex = hourToGridIndex(currentHour)
     const minutePercentage = currentMinute / 60
-    return (hourIndex + minutePercentage) * 64
+    return (hourIndex + minutePercentage) * hourHeight
   }
 
   // Meeting management functions
@@ -641,6 +649,7 @@ export const useCalendarData = (windowWidth: number, baseDate: Date = new Date()
     baseDate,
     currentTime,
     habits,
+    archivedHabits,
     conflictMaps,
     sessions,
     projects,
@@ -1071,6 +1080,88 @@ export const useCalendarData = (windowWidth: number, baseDate: Date = new Date()
         ...prev,
         { ...habit, habits_daily_logs: [], subhabits: [], habit_todoist_tasks: [] },
       ])
+    },
+    // Mark a habit as archived in local state so habitPlacement stops
+    // scheduling new occurrences (past dates with logs still render).
+    markHabitArchived: (habitId: string) => {
+      let archived:
+        | { id: string; name: string; duration: number | null; default_start_time: string | null; weekly_days: string[] | null }
+        | null = null
+      setHabits(prev => prev.map(h => {
+        if (h.id !== habitId) return h
+        archived = {
+          id: h.id,
+          name: h.name,
+          duration: h.duration ?? null,
+          default_start_time: h.default_start_time ?? null,
+          weekly_days: h.weekly_days ?? null,
+        }
+        return { ...h, is_archived: true }
+      }))
+      if (archived) {
+        setArchivedHabits(prev =>
+          prev.some(h => h.id === archived!.id)
+            ? prev
+            : [...prev, archived!].sort((a, b) => a.name.localeCompare(b.name))
+        )
+      }
+    },
+    // Unarchive a habit: persist the schedule update, drop it from the
+    // archived list, and patch the habit in local state so the calendar
+    // reflects the change without a page reload.
+    unarchiveHabit: async (
+      habitId: string,
+      updates: { duration: number; default_start_time: string; weekly_days: string[] | null }
+    ) => {
+      if (!user) return
+      const { error } = await supabase
+        .from('cassian_habits')
+        .update({
+          is_archived: false,
+          duration: updates.duration,
+          default_start_time: updates.default_start_time,
+          current_start_time: updates.default_start_time,
+          weekly_days: updates.weekly_days,
+        })
+        .eq('id', habitId)
+        .eq('user_id', user.id)
+      if (error) throw error
+
+      const archivedRow = archivedHabits.find(h => h.id === habitId)
+      setArchivedHabits(prev => prev.filter(h => h.id !== habitId))
+      setHabits(prev => {
+        const existing = prev.find(h => h.id === habitId)
+        if (existing) {
+          return prev.map(h =>
+            h.id === habitId
+              ? {
+                  ...h,
+                  is_archived: false,
+                  duration: updates.duration,
+                  default_start_time: updates.default_start_time,
+                  current_start_time: updates.default_start_time,
+                  weekly_days: updates.weekly_days,
+                }
+              : h
+          )
+        }
+        if (!archivedRow) return prev
+        return [
+          ...prev,
+          {
+            id: archivedRow.id,
+            name: archivedRow.name,
+            is_archived: false,
+            duration: updates.duration,
+            default_start_time: updates.default_start_time,
+            current_start_time: updates.default_start_time,
+            weekly_days: updates.weekly_days,
+            habits_daily_logs: [],
+            subhabits: [],
+            habit_todoist_tasks: [],
+          },
+        ]
+      })
     },
   }
 }

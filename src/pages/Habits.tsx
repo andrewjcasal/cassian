@@ -52,22 +52,22 @@ const Habits = () => {
     } else {
       // Show in sidebar on desktop
       setSelectedHabitId(habitId)
-      setSearchParams({ habitId, tab: 'notes' })
+      setSearchParams({ habitId, tab: 'settings' })
     }
   }
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [activeTopTab, setActiveTopTab] = useState<'habits' | 'progress' | 'aspects'>('habits')
-  const [initialDetailTab, setInitialDetailTab] = useState<'notes' | 'subhabits' | 'settings'>('notes')
+  const [initialDetailTab, setInitialDetailTab] = useState<'subhabits' | 'settings'>('settings')
 
   // Handle query parameters for returning from notes
   useEffect(() => {
     const habitId = searchParams.get('habitId')
     const tab = searchParams.get('tab')
-    
+
     if (habitId) {
       setSelectedHabitId(habitId)
-      if (tab && (tab === 'notes' || tab === 'subhabits' || tab === 'settings')) {
-        setInitialDetailTab(tab as 'notes' | 'subhabits' | 'settings')
+      if (tab && (tab === 'subhabits' || tab === 'settings')) {
+        setInitialDetailTab(tab as 'subhabits' | 'settings')
       }
     }
   }, [searchParams, setSearchParams])

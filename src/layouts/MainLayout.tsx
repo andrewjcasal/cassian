@@ -1,6 +1,6 @@
 import { Outlet, NavLink, Link } from 'react-router-dom'
 import { useLocation } from 'react-router'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Layout,
   Home,
@@ -24,6 +24,8 @@ import {
   Notebook,
   Sparkles,
   Zap,
+  PanelLeftClose,
+  PanelLeftOpen,
 
   Tag,
   Target,
@@ -44,6 +46,19 @@ const MainLayout = () => {
 
   const [hoveredItem, setHoveredItem] = useState<string | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    return window.localStorage.getItem('sidebarCollapsed') === 'true'
+  })
+
+  useEffect(() => {
+    window.localStorage.setItem('sidebarCollapsed', String(sidebarCollapsed))
+  }, [sidebarCollapsed])
+
+  const labelClass = sidebarCollapsed ? 'hidden' : 'hidden lg:block'
+  const iconMarginClass = sidebarCollapsed ? 'mr-0' : 'mr-0 lg:mr-1.5'
+  const justifyClass = sidebarCollapsed ? 'justify-center' : 'justify-center lg:justify-start'
+  const paddingXClass = sidebarCollapsed ? 'px-1' : 'px-1 lg:px-2'
 
   // Auto-generate reflection when habits or tasks are completed
   // useAutoReflection() // Disabled to reduce API calls
@@ -65,14 +80,14 @@ const MainLayout = () => {
     <ModalProvider>
     <div className="flex min-h-screen bg-neutral-50">
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex md:w-14 lg:w-56 flex-col bg-white border-r border-neutral-200 fixed h-screen z-10">
-        <Link to="/dashboard" className="block px-4 py-1 md:px-1 md:py-1 lg:px-4 lg:py-1">
-          <h1 className="text-lg text-primary-700 md:text-center lg:text-left" style={{ fontFamily: "'DM Serif Display', serif" }}>
-            <span className="md:hidden lg:block">Cassian</span>
+      <aside className={`hidden md:flex ${sidebarCollapsed ? 'md:w-14' : 'md:w-14 lg:w-56'} flex-col bg-white border-r border-neutral-200 fixed h-screen z-10`}>
+        <Link to="/dashboard" className={`block py-1 ${sidebarCollapsed ? 'px-1' : 'px-1 lg:px-4'}`}>
+          <h1 className={`text-lg text-primary-700 ${sidebarCollapsed ? 'text-center' : 'text-center lg:text-left'}`} style={{ fontFamily: "'DM Serif Display', serif" }}>
+            <span className={labelClass}>Cassian</span>
           </h1>
         </Link>
 
-        <nav className="flex-1 px-2 pb-4 md:px-1 lg:px-2">
+        <nav className={`flex-1 pb-4 ${paddingXClass}`}>
           <ul className="space-y-0.5">
             {navItems.map(item => {
               const Icon = item.icon
@@ -81,7 +96,7 @@ const MainLayout = () => {
                   <NavLink
                     to={item.path}
                     className={({ isActive }) =>
-                      `flex items-center rounded-md px-2 py-1 text-[13px] font-medium transition-colors md:justify-center lg:justify-start md:px-1 lg:px-2 ${
+                      `flex items-center rounded-md py-1 text-[13px] font-medium transition-colors ${justifyClass} ${paddingXClass} ${
                         isActive
                           ? 'bg-primary-50 text-primary-700'
                           : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
@@ -89,8 +104,8 @@ const MainLayout = () => {
                     }
                     title={item.label}
                   >
-                    <Icon className="mr-1.5 h-2.5 w-2.5 md:mr-0 lg:mr-1.5" />
-                    <span className="md:hidden lg:block">{item.label}</span>
+                    <Icon className={`h-2.5 w-2.5 ${iconMarginClass}`} />
+                    <span className={labelClass}>{item.label}</span>
                   </NavLink>
                 </li>
               )
@@ -103,27 +118,36 @@ const MainLayout = () => {
             href="https://ko-fi.com/andrewjcasal"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center rounded-md px-2 py-1 text-[13px] font-medium text-red-500 hover:bg-red-50 hover:text-red-600 md:justify-center lg:justify-start md:px-1 lg:px-2"
+            className={`flex items-center rounded-md py-1 text-[13px] font-medium text-red-500 hover:bg-red-50 hover:text-red-600 ${justifyClass} ${paddingXClass}`}
             title="Support"
           >
-            <Heart className="mr-1.5 h-2.5 w-2.5 md:mr-0 lg:mr-1.5" />
-            <span className="md:hidden lg:block">Support</span>
+            <Heart className={`h-2.5 w-2.5 ${iconMarginClass}`} />
+            <span className={labelClass}>Support</span>
           </a>
-          <div className="flex items-center gap-1 md:flex-col lg:flex-row">
-            <NavLink
-              to="/settings"
-              className="flex items-center rounded-md px-2 py-1 text-[13px] font-medium text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 flex-1 md:justify-center lg:justify-start md:px-1 lg:px-2"
-              title="Settings"
-            >
-              <Settings className="mr-1.5 h-2.5 w-2.5 md:mr-0 lg:mr-1.5" />
-              <span className="md:hidden lg:block">Settings</span>
-            </NavLink>
+          <NavLink
+            to="/settings"
+            className={`flex items-center rounded-md py-1 text-[13px] font-medium text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 ${justifyClass} ${paddingXClass}`}
+            title="Settings"
+          >
+            <Settings className={`h-2.5 w-2.5 ${iconMarginClass}`} />
+            <span className={labelClass}>Settings</span>
+          </NavLink>
+          <div className={`flex gap-1 ${sidebarCollapsed ? 'flex-col items-stretch' : 'flex-col items-stretch lg:flex-row lg:items-center'}`}>
             <button
               onClick={signOut}
-              className="flex items-center rounded-md px-2 py-1 text-[13px] font-medium text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 md:justify-center md:px-1 lg:px-2"
-              title="Logout"
+              className={`flex items-center rounded-md py-1 text-[13px] font-medium text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 flex-1 ${justifyClass} ${paddingXClass}`}
+              title="Log Out"
             >
-              <LogOut className="h-2.5 w-2.5" />
+              <LogOut className={`h-2.5 w-2.5 ${iconMarginClass}`} />
+              <span className={labelClass}>Log Out</span>
+            </button>
+            <button
+              onClick={() => setSidebarCollapsed(prev => !prev)}
+              className={`flex items-center justify-center rounded-md py-1 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 ${paddingXClass}`}
+              title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {sidebarCollapsed ? <PanelLeftOpen className="h-2.5 w-2.5" /> : <PanelLeftClose className="h-2.5 w-2.5" />}
             </button>
           </div>
         </div>
@@ -240,7 +264,7 @@ const MainLayout = () => {
       </AnimatePresence>
 
       {/* Main Content */}
-      <main className={`flex-1 md:ml-14 lg:ml-56 md:pt-0 w-full md:w-auto ${isCalendarPage ? 'pt-0' : 'pt-16'}`}>
+      <main className={`flex-1 ${sidebarCollapsed ? 'md:ml-14' : 'md:ml-14 lg:ml-56'} md:pt-0 w-full md:w-auto ${isCalendarPage ? 'pt-0' : 'pt-16'}`}>
         <Outlet context={{ setMobileMenuOpen }} />
       </main>
 

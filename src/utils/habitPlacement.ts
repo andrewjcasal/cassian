@@ -56,27 +56,32 @@ export const resolveHabitPlacements = (
     for (const col of dayColumns) {
       const dateKey = col.dateStr
 
-      if (habit.created_at) {
-        const creationDate = new Date(habit.created_at).toLocaleDateString('en-CA')
-        if (dateKey < creationDate) continue
-      }
-
-      // Weekly pattern filter — skipped unless an explicit daily log overrides.
-      if (habit.weekly_days && habit.weekly_days.length > 0) {
-        const dayName = col.date.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase()
-        const matchesPattern = habit.weekly_days.includes(dayName)
-        const hasOverrideLog = (habit.habits_daily_logs || []).some(
-          (l: any) => l.log_date === dateKey && !l.is_skipped
-        )
-        if (!matchesPattern && !hasOverrideLog) continue
-      }
-
       const dailyLogs = (habit.habits_daily_logs || []).filter(
         (l: any) => l.log_date === dateKey
       )
       const unskipped = dailyLogs.filter((l: any) => !l.is_skipped)
       const hasSkipped = dailyLogs.some((l: any) => l.is_skipped)
-      if (hasSkipped && unskipped.length === 0) continue
+
+      // Archived habits stop scheduling forward but stay on dates that
+      // already have an unskipped log so past completions remain visible.
+      if (habit.is_archived) {
+        if (unskipped.length === 0) continue
+      } else {
+        if (habit.created_at) {
+          const creationDate = new Date(habit.created_at).toLocaleDateString('en-CA')
+          if (dateKey < creationDate) continue
+        }
+
+        // Weekly pattern filter — skipped unless an explicit daily log overrides.
+        if (habit.weekly_days && habit.weekly_days.length > 0) {
+          const dayName = col.date.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase()
+          const matchesPattern = habit.weekly_days.includes(dayName)
+          const hasOverrideLog = unskipped.length > 0
+          if (!matchesPattern && !hasOverrideLog) continue
+        }
+
+        if (hasSkipped && unskipped.length === 0) continue
+      }
 
       const logsToRender: (any | null)[] = unskipped.length > 0 ? unskipped : [null]
 

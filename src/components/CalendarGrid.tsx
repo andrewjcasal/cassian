@@ -77,6 +77,7 @@ interface CalendarGridProps {
     topPx: number
     heightPx: number
   } | null
+  hourHeight?: number
 }
 
 export default function CalendarGrid({
@@ -99,9 +100,11 @@ export default function CalendarGrid({
   isInDragSelection,
   getCurrentTimeLinePosition,
   habitDragPreview,
+  hourHeight = 64,
 }: CalendarGridProps) {
   const timeColWidth = gridCols.split(' ')[0]
   const dayGridCols = gridCols.split(' ').slice(1).join(' ')
+  const quarterHeight = hourHeight / 4
 
   return (
     <div
@@ -115,10 +118,13 @@ export default function CalendarGrid({
             className="grid border-b border-neutral-300"
             style={{
               gridTemplateColumns: gridCols,
-              height: 64,
+              height: hourHeight,
             }}
           >
-            <div className="border-r border-neutral-300 py-0 px-1 h-16 bg-neutral-50 flex items-start">
+            <div
+              className="border-r border-neutral-300 py-0 px-1 bg-neutral-50 flex items-start"
+              style={{ height: hourHeight }}
+            >
               <div className="font-mono text-neutral-600 text-xs">{hour.display}</div>
             </div>
             {dayColumns.map((column, columnIndex) => {
@@ -127,7 +133,8 @@ export default function CalendarGrid({
               return (
                 <div
                   key={columnIndex}
-                  className={`border-r border-neutral-300 last:border-r-0 p-1 sm:p-0.5 h-16 text-sm sm:text-xs relative cursor-pointer select-none`}
+                  className={`border-r border-neutral-300 last:border-r-0 p-1 sm:p-0.5 text-sm sm:text-xs relative cursor-pointer select-none`}
+                  style={{ height: hourHeight, userSelect: 'none' }}
                   onClick={e =>
                     !isDragging && handleTimeSlotClick(e, hour.time, column.date)
                   }
@@ -146,9 +153,6 @@ export default function CalendarGrid({
                   onMouseUp={e =>
                     handleMouseUp(e, hour.time, column.date, hourIndex, columnIndex)
                   }
-                  style={{
-                    userSelect: 'none',
-                  }}
                 >
                   {/* Quarter-hour visual divisions with hover states */}
                   <div className="absolute inset-0">
@@ -230,8 +234,8 @@ export default function CalendarGrid({
             const endHourIndex = Math.floor(maxQuarters / 4)
             const endQuarter = maxQuarters % 4
 
-            const topPosition = startHourIndex * 64 + startQuarter * 16
-            const endPosition = endHourIndex * 64 + (endQuarter + 1) * 16
+            const topPosition = startHourIndex * hourHeight + startQuarter * quarterHeight
+            const endPosition = endHourIndex * hourHeight + (endQuarter + 1) * quarterHeight
             const height = endPosition - topPosition
 
             // Calculate column position

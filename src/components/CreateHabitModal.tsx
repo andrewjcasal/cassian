@@ -15,15 +15,21 @@ interface CreateHabitModalProps {
     consequences: string
     weekly_days?: string[] | null
   }) => Promise<void>
+  onUnarchive?: (
+    habitId: string,
+    updates: { duration: number; default_start_time: string; weekly_days: string[] | null }
+  ) => Promise<void>
   defaultTime?: string
   defaultDuration?: number
   defaultWeeklyDays?: string[]
+  lockedName?: string
+  existingHabitId?: string
 }
 
 const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
 
-const CreateHabitModal = ({ isOpen, onClose, onCreateHabit, defaultTime, defaultDuration, defaultWeeklyDays }: CreateHabitModalProps) => {
-  const [name, setName] = useState('')
+const CreateHabitModal = ({ isOpen, onClose, onCreateHabit, onUnarchive, defaultTime, defaultDuration, defaultWeeklyDays, lockedName, existingHabitId }: CreateHabitModalProps) => {
+  const [name, setName] = useState(lockedName ?? '')
   const [duration, setDuration] = useState(defaultDuration ?? 30)
   const [defaultStartTime, setDefaultStartTime] = useState(defaultTime ?? '09:00')
   const [weeklyDays, setWeeklyDays] = useState<string[]>(defaultWeeklyDays ?? [])
@@ -33,10 +39,11 @@ const CreateHabitModal = ({ isOpen, onClose, onCreateHabit, defaultTime, default
   // from a different slot pre-fills the new values.
   useEffect(() => {
     if (!isOpen) return
+    setName(lockedName ?? '')
     setDefaultStartTime(defaultTime ?? '09:00')
     setDuration(defaultDuration ?? 30)
     setWeeklyDays(defaultWeeklyDays ?? [])
-  }, [isOpen, defaultTime, defaultDuration, defaultWeeklyDays])
+  }, [isOpen, defaultTime, defaultDuration, defaultWeeklyDays, lockedName])
 
   const { habitTypes } = useHabitTypes()
   const fixedType = habitTypes.find(t => t.scheduling_rule === 'fixed_time')
@@ -47,6 +54,18 @@ const CreateHabitModal = ({ isOpen, onClose, onCreateHabit, defaultTime, default
 
     setLoading(true)
     try {
+      if (existingHabitId && onUnarchive) {
+        // Reuse the existing (archived) habit: unarchive and overwrite its
+        // schedule defaults instead of creating a duplicate.
+        await onUnarchive(existingHabitId, {
+          duration,
+          default_start_time: defaultStartTime,
+          weekly_days: weeklyDays.length > 0 ? weeklyDays : null,
+        })
+        onClose()
+        return
+      }
+
       await onCreateHabit({
         name: name.trim(),
         duration,
@@ -81,8 +100,11 @@ const CreateHabitModal = ({ isOpen, onClose, onCreateHabit, defaultTime, default
             placeholder="Habit name"
             value={name}
             onChange={e => setName(e.target.value)}
-            className="w-full px-1 py-1 border border-neutral-300 rounded-md text-xs"
-            autoFocus
+            readOnly={!!lockedName}
+            className={`w-full px-1 py-1 border border-neutral-300 rounded-md text-xs ${
+              lockedName ? 'bg-neutral-50 text-neutral-700' : ''
+            }`}
+            autoFocus={!lockedName}
             required
           />
         </div>
@@ -141,10 +163,12 @@ const CreateHabitModal = ({ isOpen, onClose, onCreateHabit, defaultTime, default
           </button>
           <button
             type="submit"
-            disabled={loading || !name.trim() || !fixedType}
+            disabled={loading || !name.trim() || (!existingHabitId && !fixedType)}
             className="px-2 py-1 bg-primary-600 text-white rounded text-xs hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? 'Creating...' : 'Create'}
+            {loading
+              ? existingHabitId ? 'Adding...' : 'Creating...'
+              : existingHabitId ? 'Add' : 'Create'}
           </button>
         </div>
       </form>

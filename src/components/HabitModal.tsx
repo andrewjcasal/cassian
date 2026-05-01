@@ -10,6 +10,7 @@ import { supabase } from '../lib/supabase'
 interface HabitModalProps {
   onTimeChange: (habitId: string, date: string, newTime: string, newDuration?: number) => Promise<void>
   onSkip?: (habitId: string, date: string) => Promise<void>
+  onArchive?: (habitId: string) => Promise<void>
 }
 
 interface Subhabit {
@@ -19,7 +20,7 @@ interface Subhabit {
   habits_daily_logs?: any[]
 }
 
-const HabitModal = ({ onTimeChange, onSkip }: HabitModalProps) => {
+const HabitModal = ({ onTimeChange, onSkip, onArchive }: HabitModalProps) => {
   const {
     showHabitModal,
     selectedHabit: habit,
@@ -30,6 +31,7 @@ const HabitModal = ({ onTimeChange, onSkip }: HabitModalProps) => {
   const [newDuration, setNewDuration] = useState<number>(0)
   const [loading, setLoading] = useState(false)
   const [savingFuture, setSavingFuture] = useState(false)
+  const [archiving, setArchiving] = useState(false)
   const [viewMode, setViewMode] = useState<'readonly' | 'edit'>('readonly')
 
   interface OccurrenceRow {
@@ -312,6 +314,29 @@ const HabitModal = ({ onTimeChange, onSkip }: HabitModalProps) => {
       console.error('Error skipping habit:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleArchive = async () => {
+    if (!habit) return
+
+    setArchiving(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      const { error } = await supabase
+        .from('cassian_habits')
+        .update({ is_archived: true })
+        .eq('id', habit.id)
+        .eq('user_id', user.id)
+      if (error) throw error
+      await onArchive?.(habit.id)
+      closeHabitModal()
+    } catch (error) {
+      console.error('Error archiving habit:', error)
+    } finally {
+      setArchiving(false)
     }
   }
 
@@ -699,6 +724,15 @@ const HabitModal = ({ onTimeChange, onSkip }: HabitModalProps) => {
                 {loading ? 'Skipping...' : 'Skip Today'}
               </button>
             )}
+            <button
+              type="button"
+              onClick={handleArchive}
+              disabled={archiving}
+              className="px-2 py-1 bg-neutral-200 text-neutral-700 rounded text-xs hover:bg-neutral-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Hide this habit going forward (history is preserved)"
+            >
+              {archiving ? 'Hiding...' : 'Hide'}
+            </button>
           </div>
           {!isWeekly && viewMode === 'edit' && (
             <div className="flex gap-1">

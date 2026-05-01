@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { Meeting } from '../types'
 import { supabase } from '../lib/supabase'
 import ModalWrapper from './ModalWrapper'
-import { useModal } from '../contexts/useModal'
+import { useModal, type CreateHabitDefaults } from '../contexts/useModal'
 import { useUserContext } from '../contexts/UserContext'
 import { toHHMM, minutesBetween } from '../utils/formatTime'
 
@@ -14,17 +14,27 @@ interface Category {
   color: string
 }
 
+interface ArchivedHabitOption {
+  id: string
+  name: string
+  duration: number | null
+  default_start_time: string | null
+  weekly_days: string[] | null
+}
+
 interface MeetingModalProps {
   onAddHabitBlock?: (habitId: string, date: string, startTime: string, duration: number) => void
   onMeetingHabitLinked?: (meetingId: string, habitId: string) => void
   onAddNote?: () => void
-  onCreateHabit?: (defaults?: { time?: string; duration?: number; weeklyDays?: string[] }) => void
+  onCreateHabit?: (defaults?: CreateHabitDefaults) => void
   previousTitles?: { title: string; count: number; lastUsed: Date }[]
   categories?: Category[]
   calendarHabits?: any[]
+  archivedHabits?: ArchivedHabitOption[]
 }
 
-const MeetingModal = ({ onAddHabitBlock, onMeetingHabitLinked, onAddNote, onCreateHabit, previousTitles = [], categories = [], calendarHabits = [] }: MeetingModalProps) => {
+
+const MeetingModal = ({ onAddHabitBlock, onMeetingHabitLinked, onAddNote, onCreateHabit, previousTitles = [], categories = [], calendarHabits = [], archivedHabits = [] }: MeetingModalProps) => {
   const {
     showMeetingModal,
     newMeeting: meeting,
@@ -108,6 +118,21 @@ const MeetingModal = ({ onAddHabitBlock, onMeetingHabitLinked, onAddNote, onCrea
       .slice(0, 10)
   }, [previousTitles, localTitle])
 
+
+  const openArchivedHabitForm = (habit: ArchivedHabitOption) => {
+    const slotTime = selectedTimeSlot?.time || toHHMM(meeting.start_time) || habit.default_start_time || undefined
+    const draggedMin = minutesBetween(meeting.start_time, meeting.end_time)
+    const duration = draggedMin || habit.duration || undefined
+    const weeklyDays = habit.weekly_days ?? undefined
+    closeMeetingModal()
+    onCreateHabit?.({
+      time: slotTime,
+      duration,
+      weeklyDays,
+      lockedName: habit.name,
+      existingHabitId: habit.id,
+    })
+  }
 
   const handleAddHabitBlock = async (habit: any) => {
     if (!user || !selectedTimeSlot) return
@@ -467,6 +492,21 @@ const MeetingModal = ({ onAddHabitBlock, onMeetingHabitLinked, onAddNote, onCrea
                   </button>
                 )}
               </div>
+              {archivedHabits.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {archivedHabits.map(habit => (
+                    <button
+                      key={habit.id}
+                      type="button"
+                      onClick={() => openArchivedHabitForm(habit)}
+                      className="px-2 py-0.5 rounded-full text-xs border bg-neutral-50 border-neutral-300 text-neutral-600 hover:bg-primary-50 hover:border-primary-300 hover:text-primary-700 transition-colors"
+                      title="Reschedule hidden habit"
+                    >
+                      {habit.name}
+                    </button>
+                  ))}
+                </div>
+              )}
               {skippedHabits.length > 0 && (
                 <div className="pt-2 border-t border-neutral-100">
                   <p className="text-xs text-neutral-400 mb-1.5">Skipped habits</p>
