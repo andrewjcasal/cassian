@@ -49,6 +49,10 @@ export interface ModalState {
   // Create Habit modal
   showCreateHabitModal: boolean
   createHabitDefaults: CreateHabitDefaults | null
+
+  // Project Activity modal
+  showProjectActivityModal: boolean
+  selectedProjectActivity: any | null
 }
 
 export interface CreateHabitDefaults {
@@ -62,6 +66,8 @@ export interface CreateHabitDefaults {
 export interface CalendarModalHandlers {
   onSaveMeeting?: (e: React.FormEvent, meeting: any, editingMeeting?: Meeting) => Promise<void>
   onDeleteMeeting?: (meeting: Meeting) => Promise<void>
+  onSaveProjectActivity?: (activity: { project_id: string; start_time: string; end_time: string; note?: string }) => Promise<void>
+  onDeleteProjectActivity?: (id: string) => Promise<void>
   onCompleteTask?: (task: any) => Promise<void>
   onDeleteTask?: (task: any) => Promise<void>
   onUpdateTask?: (
@@ -106,6 +112,8 @@ export interface CalendarModalData {
     default_start_time: string | null
     weekly_days: string[] | null
   }[]
+  projects?: { id: string; name: string; color?: string | null }[]
+  projectActivity?: any[]
 }
 
 export interface ModalActions {
@@ -114,6 +122,8 @@ export interface ModalActions {
   setNewMeeting: (meeting: any) => void
   handleSaveMeeting: (e: React.FormEvent, updatedMeeting: ModalState['newMeeting'], editingMeeting?: Meeting) => Promise<void>
   handleDeleteMeeting: (meeting: Meeting) => Promise<void>
+  handleSaveProjectActivity: (activity: { project_id: string; start_time: string; end_time: string; note?: string }) => Promise<void>
+  handleDeleteProjectActivity: (id: string) => Promise<void>
 
   openHabitModal: (habit: any, date: Date) => void
   closeHabitModal: () => void
@@ -135,6 +145,9 @@ export interface ModalActions {
 
   openCreateHabitModal: (defaults?: CreateHabitDefaults) => void
   closeCreateHabitModal: () => void
+
+  openProjectActivityModal: (activity: any) => void
+  closeProjectActivityModal: () => void
 
   registerModalHandlers: (handlers: CalendarModalHandlers) => void
   setCalendarModalData: (data: CalendarModalData) => void

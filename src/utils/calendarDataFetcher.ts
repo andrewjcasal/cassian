@@ -16,7 +16,7 @@ export const fetchAllCalendarData = async (userId: string) => {
 
   try {
     // Fetch all data sources in parallel with timeout protection
-    const [habitsResult, archivedHabitsWithLogsResult, archivedHabitsListResult, sessionsResult, projectsResult, meetingsResult, tasksDailyLogsResult, tasksResult, settingsResult, calendarNotesResult, habitNotesResult, categoryBuffersResult] = await Promise.allSettled([
+    const [habitsResult, archivedHabitsWithLogsResult, archivedHabitsListResult, sessionsResult, projectsResult, meetingsResult, tasksDailyLogsResult, tasksResult, settingsResult, calendarNotesResult, habitNotesResult, categoryBuffersResult, projectActivityResult] = await Promise.allSettled([
       // Top-level habits only. Subhabits (parent_habit_id IS NOT NULL) are
       // fetched separately below and merged in — PostgREST can be fussy about
       // self-referencing embeds, so we avoid that hint here.
@@ -40,7 +40,8 @@ export const fetchAllCalendarData = async (userId: string) => {
       // banner preview, start_date/start_time for grid indexing. Cap at 500
       // most-recent so users with years of notes don't pay to fetch them all.
       withTimeout(supabase.from('cassian_notes').select('id, user_id, title, content, start_date, start_time, created_at, updated_at').order('created_at', { ascending: false }).limit(500)),
-      withTimeout(supabase.from('cassian_category_buffers').select('*, meeting_categories:cassian_meeting_categories(id, name, color)').eq('user_id', userId))
+      withTimeout(supabase.from('cassian_category_buffers').select('*, meeting_categories:cassian_meeting_categories(id, name, color)').eq('user_id', userId)),
+      withTimeout(supabase.from('cassian_project_activity').select('*, projects:cassian_projects(*)').eq('user_id', userId))
     ])
 
     // Extract data with fallbacks
@@ -79,6 +80,7 @@ export const fetchAllCalendarData = async (userId: string) => {
     const calendarNotes = calendarNotesResult.status === 'fulfilled' ? (calendarNotesResult.value.data || []) : []
     const habitNotes = habitNotesResult.status === 'fulfilled' ? (habitNotesResult.value.data || []) : []
     const categoryBuffers = categoryBuffersResult.status === 'fulfilled' ? (categoryBuffersResult.value.data || []) : []
+    const projectActivity = projectActivityResult.status === 'fulfilled' ? (projectActivityResult.value.data || []) : []
 
     // Log any failures
     const failures = [
@@ -91,7 +93,8 @@ export const fetchAllCalendarData = async (userId: string) => {
       settingsResult.status === 'rejected' && 'settings',
       calendarNotesResult.status === 'rejected' && 'calendarNotes',
       habitNotesResult.status === 'rejected' && 'habitNotes',
-      categoryBuffersResult.status === 'rejected' && 'categoryBuffers'
+      categoryBuffersResult.status === 'rejected' && 'categoryBuffers',
+      projectActivityResult.status === 'rejected' && 'projectActivity'
     ].filter(Boolean)
     
     if (failures.length > 0) {
@@ -100,11 +103,11 @@ export const fetchAllCalendarData = async (userId: string) => {
 
     
 
-    return { habits, archivedHabitsList, sessions, projects, meetings, tasksDailyLogs, tasks, settings, calendarNotes, habitNotes, categoryBuffers }
+    return { habits, archivedHabitsList, sessions, projects, meetings, tasksDailyLogs, tasks, settings, calendarNotes, habitNotes, categoryBuffers, projectActivity }
   } catch (error) {
     console.error('Critical error fetching calendar data:', error)
     // Return minimal data to prevent complete failure
-    return { habits: [], archivedHabitsList: [], sessions: [], projects: [], meetings: [], tasksDailyLogs: [], tasks: [], settings: null, calendarNotes: [], habitNotes: [], categoryBuffers: [] }
+    return { habits: [], archivedHabitsList: [], sessions: [], projects: [], meetings: [], tasksDailyLogs: [], tasks: [], settings: null, calendarNotes: [], habitNotes: [], categoryBuffers: [], projectActivity: [] }
   }
 }
 

@@ -46,6 +46,7 @@ export const useCalendarData = (windowWidth: number, baseDate: Date = new Date()
   const [sessions, setSessions] = useState<any[]>([])
   const [projects, setProjects] = useState<any[]>([])
   const [meetings, setMeetings] = useState<any[]>([])
+  const [projectActivity, setProjectActivity] = useState<any[]>([])
   const [tasksDailyLogs, setTasksDailyLogs] = useState<any[]>([])
   const [scheduledTasksCache, setScheduledTasksCache] = useState<Map<string, any[]>>(new Map())
   const [tasksScheduled, setTasksScheduled] = useState(false)
@@ -118,7 +119,7 @@ export const useCalendarData = (windowWidth: number, baseDate: Date = new Date()
 
         // Step 1: Fetch all base data in parallel and update UI immediately
         const dataPromise = fetchAllCalendarData(user.id)
-        const { habits: fetchedHabits, archivedHabitsList: fetchedArchivedHabits, sessions: fetchedSessions, projects: fetchedProjects, meetings: fetchedMeetings, tasksDailyLogs: fetchedTasksDailyLogs, tasks: fetchedTasks, settings: fetchedSettings, calendarNotes: fetchedCalendarNotes, habitNotes: fetchedHabitNotes, categoryBuffers: fetchedCategoryBuffers } = await dataPromise
+        const { habits: fetchedHabits, archivedHabitsList: fetchedArchivedHabits, sessions: fetchedSessions, projects: fetchedProjects, meetings: fetchedMeetings, tasksDailyLogs: fetchedTasksDailyLogs, tasks: fetchedTasks, settings: fetchedSettings, calendarNotes: fetchedCalendarNotes, habitNotes: fetchedHabitNotes, categoryBuffers: fetchedCategoryBuffers, projectActivity: fetchedProjectActivity } = await dataPromise
 
         if (cancelled) return
 
@@ -136,6 +137,7 @@ export const useCalendarData = (windowWidth: number, baseDate: Date = new Date()
         setSessions(fetchedSessions)
         setProjects(fetchedProjects)
         setMeetings(fetchedMeetings)
+        setProjectActivity(fetchedProjectActivity)
         setTasksDailyLogs(fetchedTasksDailyLogs)
         setSettings(fetchedSettings)
         setCalendarNotes(fetchedCalendarNotes)
@@ -481,6 +483,64 @@ export const useCalendarData = (windowWidth: number, baseDate: Date = new Date()
     return meetingsIndex.get(key) || EMPTY
   }
 
+  const projectActivityIndex = useMemo(() => {
+    const index = new Map<string, any[]>()
+    projectActivity.forEach(activity => {
+      const start = new Date(activity.start_time)
+      const end = new Date(activity.end_time)
+      const startHour = start.getHours()
+      const startMin = start.getMinutes()
+      const startDateStr = format(start, 'yyyy-MM-dd')
+
+      const durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60)
+      const startTotalMin = startHour * 60 + startMin
+      const endTotalMin = startTotalMin + durationHours * 60
+
+      const key = `${getColumnDate(startDateStr, startHour)}-${startHour}`
+      const arr = index.get(key) || []
+      arr.push(activity)
+      index.set(key, arr)
+
+      // Mirror meeting clip behavior for late-night blocks crossing the
+      // grid-start split.
+      if (isLateNightHour(startHour) && endTotalMin > GRID_START_MINUTES) {
+        const clipped = {
+          ...activity,
+          _clippedStart: GRID_START_CLOCK,
+          _originalStart: activity.start_time,
+        }
+        const morningKey = `${startDateStr}-${GRID_START_HOUR}`
+        const morningArr = index.get(morningKey) || []
+        morningArr.push(clipped)
+        index.set(morningKey, morningArr)
+      }
+    })
+    return index
+  }, [projectActivity])
+
+  const getProjectActivityForTimeSlot = (timeSlot: string, date: Date) => {
+    const key = `${format(date, 'yyyy-MM-dd')}-${parseInt(timeSlot.split(':')[0])}`
+    return projectActivityIndex.get(key) || EMPTY
+  }
+
+  const addProjectActivity = async (activityData: { project_id: string; start_time: string; end_time: string; note?: string }) => {
+    if (!user) throw new Error('User not authenticated')
+    const { data, error } = await supabase
+      .from('cassian_project_activity')
+      .insert({ ...activityData, user_id: user.id })
+      .select('*, projects:cassian_projects(*)')
+      .single()
+    if (error) throw error
+    setProjectActivity(prev => [...prev, data])
+    return data
+  }
+
+  const deleteProjectActivity = async (id: string) => {
+    const { error } = await supabase.from('cassian_project_activity').delete().eq('id', id)
+    if (error) throw error
+    setProjectActivity(prev => prev.filter(a => a.id !== id))
+  }
+
   // Resolve every habit occurrence's effective time window once, using the
   // shared placement algorithm. The render path indexes the results
   // per-hour-slot; the task-scheduler conflict map reads the same list so
@@ -654,11 +714,15 @@ export const useCalendarData = (windowWidth: number, baseDate: Date = new Date()
     sessions,
     projects,
     meetings,
+    projectActivity,
     tasksDailyLogs,
     isDataLoading,
     addMeeting,
     updateMeeting,
     deleteMeeting,
+    addProjectActivity,
+    deleteProjectActivity,
+    getProjectActivityForTimeSlot,
     dayColumns,
     hourSlots,
     getCurrentTimeLinePosition,

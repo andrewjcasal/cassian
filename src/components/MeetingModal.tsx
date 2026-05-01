@@ -22,6 +22,12 @@ interface ArchivedHabitOption {
   weekly_days: string[] | null
 }
 
+interface ProjectOption {
+  id: string
+  name: string
+  color?: string | null
+}
+
 interface MeetingModalProps {
   onAddHabitBlock?: (habitId: string, date: string, startTime: string, duration: number) => void
   onMeetingHabitLinked?: (meetingId: string, habitId: string) => void
@@ -31,10 +37,20 @@ interface MeetingModalProps {
   categories?: Category[]
   calendarHabits?: any[]
   archivedHabits?: ArchivedHabitOption[]
+  projects?: ProjectOption[]
 }
 
-
-const MeetingModal = ({ onAddHabitBlock, onMeetingHabitLinked, onAddNote, onCreateHabit, previousTitles = [], categories = [], calendarHabits = [], archivedHabits = [] }: MeetingModalProps) => {
+const MeetingModal = ({
+  onAddHabitBlock,
+  onMeetingHabitLinked,
+  onAddNote,
+  onCreateHabit,
+  previousTitles = [],
+  categories = [],
+  calendarHabits = [],
+  archivedHabits = [],
+  projects = [],
+}: MeetingModalProps) => {
   const {
     showMeetingModal,
     newMeeting: meeting,
@@ -43,6 +59,7 @@ const MeetingModal = ({ onAddHabitBlock, onMeetingHabitLinked, onAddNote, onCrea
     closeMeetingModal,
     setNewMeeting,
     handleSaveMeeting,
+    handleSaveProjectActivity,
     handleDeleteMeeting,
   } = useModal()
   const { user } = useUserContext()
@@ -51,7 +68,10 @@ const MeetingModal = ({ onAddHabitBlock, onMeetingHabitLinked, onAddNote, onCrea
   const [showDescriptionField, setShowDescriptionField] = useState(false)
   const [showFullForm, setShowFullForm] = useState(false)
   const [localTitle, setLocalTitle] = useState(meeting.title)
-  const [viewMode, setViewMode] = useState<'readonly' | 'edit' | 'create-habit' | 'link-habit'>('readonly')
+  const [viewMode, setViewMode] = useState<'readonly' | 'edit' | 'create-habit' | 'link-habit' | 'project-activity'>('readonly')
+  const [activityProjectId, setActivityProjectId] = useState('')
+  const [activityNote, setActivityNote] = useState('')
+  const [savingActivity, setSavingActivity] = useState(false)
   const [newHabitName, setNewHabitName] = useState('')
   const [newHabitDuration, setNewHabitDuration] = useState(30)
   const [newHabitStartTime, setNewHabitStartTime] = useState('09:00')
@@ -78,6 +98,8 @@ const MeetingModal = ({ onAddHabitBlock, onMeetingHabitLinked, onAddNote, onCrea
       setShowLocationField(false)
       setShowDescriptionField(false)
       setShowFullForm(false)
+      setActivityProjectId('')
+      setActivityNote('')
     }
   }, [showMeetingModal, meeting.title])
 
@@ -247,11 +269,42 @@ const MeetingModal = ({ onAddHabitBlock, onMeetingHabitLinked, onAddNote, onCrea
     }
   }
 
+  const buildIso = (timeOrIso: string, dateStr: string): string => {
+    if (typeof timeOrIso === 'string' && timeOrIso.includes('T')) return timeOrIso
+    return new Date(`${dateStr}T${timeOrIso}:00`).toISOString()
+  }
+
+  const handleSubmitProjectActivity = async () => {
+    if (!activityProjectId || !meeting.date || !meeting.start_time || !meeting.end_time) return
+    setSavingActivity(true)
+    try {
+      const startIso = buildIso(meeting.start_time, meeting.date)
+      let endIso = buildIso(meeting.end_time, meeting.date)
+      // Cross-midnight: if end <= start, push end to the next day.
+      if (new Date(endIso).getTime() <= new Date(startIso).getTime()) {
+        const end = new Date(endIso)
+        end.setDate(end.getDate() + 1)
+        endIso = end.toISOString()
+      }
+      await handleSaveProjectActivity({
+        project_id: activityProjectId,
+        start_time: startIso,
+        end_time: endIso,
+        note: activityNote.trim() || undefined,
+      })
+    } catch (err) {
+      console.error('Error saving project activity:', err)
+    } finally {
+      setSavingActivity(false)
+    }
+  }
+
   // Return null AFTER all hooks have been called to maintain hook order
   if (!showMeetingModal) return null
 
   const getTitle = () => {
     if (viewMode === 'create-habit') return 'Create Habit'
+    if (viewMode === 'project-activity') return 'Track Project Time'
     if (viewMode === 'edit') return editingMeeting ? 'Edit Meeting' : 'Add Meeting'
     return meeting.title || 'Meeting'
   }
@@ -332,6 +385,75 @@ const MeetingModal = ({ onAddHabitBlock, onMeetingHabitLinked, onAddNote, onCrea
                   Ignore this event
                 </button>
               )}
+            </div>
+          </div>
+
+        ) : viewMode === 'project-activity' ? (
+          <div className="space-y-2">
+            <div>
+              <label className="block text-xs font-medium text-neutral-600 mb-1">Project</label>
+              <select
+                value={activityProjectId}
+                onChange={e => setActivityProjectId(e.target.value)}
+                className="w-full px-2 py-1 border border-neutral-300 rounded-md text-xs"
+                autoFocus
+              >
+                <option value="">Choose project...</option>
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-1">
+              <input
+                type="date"
+                value={meeting.date}
+                onChange={e => setNewMeeting({ ...meeting, date: e.target.value })}
+                className="flex-1 px-1 py-1 border border-neutral-300 rounded-md text-xs"
+                required
+              />
+              <input
+                type="time"
+                value={typeof meeting.start_time === 'string' && meeting.start_time.includes('T')
+                  ? new Date(meeting.start_time).toTimeString().slice(0, 5)
+                  : meeting.start_time}
+                onChange={e => setNewMeeting({ ...meeting, start_time: e.target.value })}
+                className="flex-1 px-1 py-1 border border-neutral-300 rounded-md text-xs"
+                required
+              />
+              <input
+                type="time"
+                value={typeof meeting.end_time === 'string' && meeting.end_time.includes('T')
+                  ? new Date(meeting.end_time).toTimeString().slice(0, 5)
+                  : meeting.end_time}
+                onChange={e => setNewMeeting({ ...meeting, end_time: e.target.value })}
+                className="flex-1 px-1 py-1 border border-neutral-300 rounded-md text-xs"
+                required
+              />
+            </div>
+            <input
+              type="text"
+              placeholder="Note (optional)"
+              value={activityNote}
+              onChange={e => setActivityNote(e.target.value)}
+              className="w-full px-1 py-1 border border-neutral-300 rounded-md text-xs"
+            />
+            <div className="flex items-center justify-end gap-1 pt-1">
+              <button
+                type="button"
+                onClick={closeMeetingModal}
+                className="px-2 py-1 text-neutral-600 text-xs hover:text-neutral-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitProjectActivity}
+                disabled={savingActivity || !activityProjectId}
+                className="px-2 py-1 bg-primary-600 text-white rounded text-xs hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {savingActivity ? 'Saving...' : 'Save'}
+              </button>
             </div>
           </div>
 
@@ -461,6 +583,19 @@ const MeetingModal = ({ onAddHabitBlock, onMeetingHabitLinked, onAddNote, onCrea
                     className="text-xs text-primary-600 hover:text-primary-800"
                   >
                     + Add note
+                  </button>
+                )}
+                {projects.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActivityProjectId('')
+                      setActivityNote('')
+                      setViewMode('project-activity')
+                    }}
+                    className="text-xs text-primary-600 hover:text-primary-800"
+                  >
+                    + Project activity
                   </button>
                 )}
                 {onCreateHabit && (
@@ -769,7 +904,7 @@ onChange={e => {
               />
             ) : null}
 
-            {(!meeting.location && !showLocationField || !meeting.description && !showDescriptionField) && (
+            {(!meeting.location && !showLocationField || !meeting.description && !showDescriptionField || (!editingMeeting && projects.length > 0)) && (
               <div className="flex gap-2">
                 {!meeting.location && !showLocationField && (
                   <button type="button" onClick={() => setShowLocationField(true)} className="text-xs text-neutral-400 hover:text-neutral-600">
@@ -779,6 +914,19 @@ onChange={e => {
                 {!meeting.description && !showDescriptionField && (
                   <button type="button" onClick={() => setShowDescriptionField(true)} className="text-xs text-neutral-400 hover:text-neutral-600">
                     + Description
+                  </button>
+                )}
+                {!editingMeeting && projects.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActivityProjectId('')
+                      setActivityNote('')
+                      setViewMode('project-activity')
+                    }}
+                    className="text-xs text-neutral-400 hover:text-neutral-600"
+                  >
+                    + Project activity
                   </button>
                 )}
               </div>
