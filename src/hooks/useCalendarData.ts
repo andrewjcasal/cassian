@@ -129,7 +129,7 @@ export const useCalendarData = (windowWidth: number, baseDate: Date = new Date()
         const filteredTasksDailyLogs = fetchedTasksDailyLogs.filter(log => log.log_date !== todayStr)
         const dayColumnsList = getDayColumns()
         const newConflictMaps = computeConflictMaps(fetchedHabits, fetchedSessions, fetchedMeetings, dayColumnsList, filteredTasksDailyLogs)
-        const generatedBuffers = generateBuffersForDays(dayColumnsList, fetchedMeetings)
+        const generatedBuffers = generateBuffersForDays(dayColumnsList, fetchedMeetings, fetchedProjectActivity)
 
         if (cancelled) return
         setHabits(fetchedHabits)
@@ -375,8 +375,8 @@ export const useCalendarData = (windowWidth: number, baseDate: Date = new Date()
           const newConflictMaps = computeConflictMaps(habits, sessions, meetings, dayColumns, filteredTasksDailyLogs)
           setConflictMaps(newConflictMaps)
           
-          // Regenerate buffers with updated meetings
-          const regeneratedBuffers = generateBuffersForDays(dayColumns, meetings)
+          // Regenerate buffers with updated meetings + project activity
+          const regeneratedBuffers = generateBuffersForDays(dayColumns, meetings, projectActivity)
           setBuffers(regeneratedBuffers)
 
           try {
@@ -619,7 +619,7 @@ export const useCalendarData = (windowWidth: number, baseDate: Date = new Date()
   }
 
   const buffersIndex = useMemo(() => {
-    const generatedBuffers = generateBuffersForDays(dayColumns, meetings)
+    const generatedBuffers = generateBuffersForDays(dayColumns, meetings, projectActivity)
     const index = new Map<string, any[]>()
     generatedBuffers.forEach((buffer, dateStr) => {
       if (!buffer || !buffer.isActive) return
@@ -629,7 +629,7 @@ export const useCalendarData = (windowWidth: number, baseDate: Date = new Date()
       index.set(key, [{ ...buffer, topPosition: (minutes / 60) * 100 }])
     })
     return index
-  }, [dayColumns, meetings])
+  }, [dayColumns, meetings, projectActivity])
 
   const categoryBuffersIndex = useMemo(() => {
     const index = new Map<string, any[]>()

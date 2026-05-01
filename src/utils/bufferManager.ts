@@ -13,57 +13,61 @@ export interface BufferTime {
   isActive: boolean
 }
 
-export const generateDailyBuffer = (date: Date, meetings: any[] = []): BufferTime | null => {
+export const generateDailyBuffer = (date: Date, meetings: any[] = [], projectActivity: any[] = []): BufferTime | null => {
   const dateStr = format(date, 'yyyy-MM-dd')
   const currentTime = new Date()
   const isToday = format(currentTime, 'yyyy-MM-dd') === dateStr
-  
+
   // Don't generate buffers for past dates
   if (date < new Date(new Date().setHours(0, 0, 0, 0))) {
     return null
   }
-  
+
   let startHour = 17.5 // 5:30 PM
   let duration = 60 // 1 hour
   let isReduced = false
-  
+
   if (isToday) {
     const currentHour = currentTime.getHours()
     const currentMinute = currentTime.getMinutes()
     const currentTimeInMinutes = currentHour * 60 + currentMinute
-    
+
     // If it's the same day, reduce by 30 minutes
     duration = 30
     isReduced = true
-    
+
     // If it's after 1 PM (13:00), buffer disappears
     if (currentTimeInMinutes >= 13 * 60) {
       return null
     }
   }
-  
-  // Check for meeting conflicts and adjust buffer position
+
+  // Check for meeting / project-activity conflicts and adjust buffer position
   const bufferStart = startHour * 60 // 5:30 PM in minutes
   const bufferEnd = bufferStart + duration
-  
-  const conflictingMeeting = meetings.find(meeting => {
-    const meetingStart = new Date(meeting.start_time)
-    const meetingEnd = new Date(meeting.end_time)
-    const meetingDateStr = format(meetingStart, 'yyyy-MM-dd')
-    
-    if (meetingDateStr !== dateStr) return false
-    
-    const meetingStartMinutes = meetingStart.getHours() * 60 + meetingStart.getMinutes()
-    const meetingEndMinutes = meetingEnd.getHours() * 60 + meetingEnd.getMinutes()
-    
-    // Check if meeting overlaps with buffer time
-    return (meetingStartMinutes < bufferEnd && meetingEndMinutes > bufferStart)
+
+  // Treat meetings and project activity blocks as the same kind of fixed
+  // commitment for buffer placement.
+  const blockers = [...meetings, ...projectActivity]
+
+  const conflictingBlocker = blockers.find(blocker => {
+    const blockerStart = new Date(blocker.start_time)
+    const blockerEnd = new Date(blocker.end_time)
+    const blockerDateStr = format(blockerStart, 'yyyy-MM-dd')
+
+    if (blockerDateStr !== dateStr) return false
+
+    const blockerStartMinutes = blockerStart.getHours() * 60 + blockerStart.getMinutes()
+    const blockerEndMinutes = blockerEnd.getHours() * 60 + blockerEnd.getMinutes()
+
+    // Check if blocker overlaps with buffer time
+    return (blockerStartMinutes < bufferEnd && blockerEndMinutes > bufferStart)
   })
-  
-  // If there's a conflict, position buffer after the meeting
-  if (conflictingMeeting) {
-    const meetingEnd = new Date(conflictingMeeting.end_time)
-    const meetingEndMinutes = meetingEnd.getHours() * 60 + meetingEnd.getMinutes()
+
+  // If there's a conflict, position buffer after the blocker
+  if (conflictingBlocker) {
+    const blockerEnd = new Date(conflictingBlocker.end_time)
+    const meetingEndMinutes = blockerEnd.getHours() * 60 + blockerEnd.getMinutes()
     
     // Position buffer to start after meeting ends
     const newStartMinutes = meetingEndMinutes
@@ -113,16 +117,16 @@ export const generateDailyBuffer = (date: Date, meetings: any[] = []): BufferTim
   return buffer
 }
 
-export const generateBuffersForDays = (dayColumns: any[], meetings: any[] = []): Map<string, BufferTime> => {
+export const generateBuffersForDays = (dayColumns: any[], meetings: any[] = [], projectActivity: any[] = []): Map<string, BufferTime> => {
   const buffers = new Map<string, BufferTime>()
-  
+
   dayColumns.forEach(dayColumn => {
-    const buffer = generateDailyBuffer(dayColumn.date, meetings)
+    const buffer = generateDailyBuffer(dayColumn.date, meetings, projectActivity)
     if (buffer) {
       buffers.set(dayColumn.dateStr, buffer)
     }
   })
-  
+
   return buffers
 }
 
