@@ -31,7 +31,7 @@ const CalendarContent = () => {
   const [meetingCategories, setMeetingCategories] = useState<{ id: string; name: string; color: string }[]>([])
   const [calendarHabits, setCalendarHabits] = useState<any[]>([])
 
-  const { openMeetingModal, openHabitModal, openTaskModal, openSessionModal, closeAllModals, openResizeConflictDialog, selectedTimeSlot: modalTimeSlot, registerModalHandlers, setCalendarModalData } = useModal()
+  const { openMeetingModal, openHabitModal, openTaskModal, openSessionModal, openProjectActivityModal, closeAllModals, openResizeConflictDialog, selectedTimeSlot: modalTimeSlot, registerModalHandlers, setCalendarModalData } = useModal()
   const { user } = useUserContext()
   const { createHabit } = useHabits()
   const { setMobileMenuOpen } = useOutletContext<{ setMobileMenuOpen: (open: boolean) => void }>()
@@ -198,6 +198,11 @@ const CalendarContent = () => {
     addMeeting,
     updateMeeting,
     deleteMeeting,
+    addProjectActivity,
+    deleteProjectActivity,
+    getProjectActivityForTimeSlot,
+    projects,
+    projectActivity,
     isDataLoading,
     calendarNotes,
     habitNotes,
@@ -1089,6 +1094,7 @@ const CalendarContent = () => {
       const meetingsInSlot = getMeetingsForTimeSlot(timeSlot, date)
       const buffersInSlot = getBuffersForCalendarTimeSlot(timeSlot, date)
       const categoryBuffersInSlot = getCategoryBuffersForTimeSlot(timeSlot, date)
+      const projectActivityInSlot = getProjectActivityForTimeSlot(timeSlot, date)
       // Tasks render from tasks_daily_logs (single source of truth)
       const tasksInSlot: any[] = []
       const tasksDailyLogsInSlot = getTasksDailyLogsForTimeSlot(timeSlot, date)
@@ -1104,6 +1110,7 @@ const CalendarContent = () => {
           tasksInSlot={tasksInSlot}
           tasksDailyLogsInSlot={tasksDailyLogsInSlot}
           categoryBuffersInSlot={categoryBuffersInSlot}
+          projectActivityInSlot={projectActivityInSlot}
           timeSlot={timeSlot}
           date={date}
           dateStr={dateStr}
@@ -1112,6 +1119,7 @@ const CalendarContent = () => {
           handleSessionClick={handleSessionClick}
           handleTaskClick={handleTaskClick}
           handleEditMeeting={handleEditMeeting}
+          handleProjectActivityClick={openProjectActivityModal}
           onMeetingResizeStart={handleMeetingResizeStart}
           onTaskLogDragStart={handleTaskLogDragStart}
           draggingTaskLogId={draggingTaskLog?.id}
@@ -1132,12 +1140,14 @@ const CalendarContent = () => {
       getTasksDailyLogsForTimeSlot,
       getBuffersForCalendarTimeSlot,
       getCategoryBuffersForTimeSlot,
+      getProjectActivityForTimeSlot,
       isDataLoading,
       tasksScheduled,
       handleHabitClick,
       handleSessionClick,
       handleTaskClick,
       handleEditMeeting,
+      openProjectActivityModal,
       handleTaskLogDragStart,
       draggingTaskLog,
       taskLogDragY,
@@ -1244,6 +1254,12 @@ const CalendarContent = () => {
     handlersRef.current = {
       saveMeeting: handleSaveMeeting,
       deleteMeeting: handleDeleteMeeting,
+      saveProjectActivity: async (activity: { project_id: string; start_time: string; end_time: string; note?: string }) => {
+        await addProjectActivity(activity)
+      },
+      deleteProjectActivity: async (id: string) => {
+        await deleteProjectActivity(id)
+      },
       habitTimeChange: handleHabitTimeChangeWithReset,
       habitSkip: handleHabitSkipWithReset,
       removeTask: removeTaskFromCalendar,
@@ -1288,6 +1304,12 @@ const CalendarContent = () => {
     },
     onDeleteMeeting: async meeting => {
       await handlersRef.current.deleteMeeting?.(meeting)
+    },
+    onSaveProjectActivity: async activity => {
+      await handlersRef.current.saveProjectActivity?.(activity)
+    },
+    onDeleteProjectActivity: async id => {
+      await handlersRef.current.deleteProjectActivity?.(id)
     },
     onCompleteTask: async task => {
       // Fast path: flip is_complete, wipe daily logs, remove from UI.
@@ -1414,8 +1436,8 @@ const CalendarContent = () => {
   }, [modalHandlers, registerModalHandlers])
 
   useEffect(() => {
-    setCalendarModalData({ meetingTitles, meetingCategories, habits: calendarHabits })
-  }, [meetingTitles, meetingCategories, calendarHabits, setCalendarModalData])
+    setCalendarModalData({ meetingTitles, meetingCategories, habits: calendarHabits, projects, projectActivity })
+  }, [meetingTitles, meetingCategories, calendarHabits, projects, projectActivity, setCalendarModalData])
 
   return (
     <div className="flex flex-col bg-white md:h-screen md:overflow-hidden">

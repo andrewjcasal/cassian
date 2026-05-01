@@ -35,6 +35,7 @@ interface CalendarEventSlotsProps {
   tasksInSlot: any[]
   tasksDailyLogsInSlot: any[]
   categoryBuffersInSlot: any[]
+  projectActivityInSlot?: any[]
   timeSlot: string
   date: Date
   dateStr: string
@@ -43,6 +44,7 @@ interface CalendarEventSlotsProps {
   handleSessionClick: (session: any) => void
   handleTaskClick: (task: any) => void
   handleEditMeeting: (meeting: any) => void
+  handleProjectActivityClick?: (activity: any) => void
   onMeetingResizeStart?: (meeting: any, e: React.MouseEvent) => void
   onTaskLogDragStart?: (log: any, e: React.MouseEvent) => void
   draggingTaskLogId?: string | null
@@ -62,6 +64,7 @@ function CalendarEventSlots({
   tasksInSlot,
   tasksDailyLogsInSlot,
   categoryBuffersInSlot,
+  projectActivityInSlot = [],
   timeSlot,
   date,
   dateStr,
@@ -70,6 +73,7 @@ function CalendarEventSlots({
   handleSessionClick,
   handleTaskClick,
   handleEditMeeting,
+  handleProjectActivityClick,
   onMeetingResizeStart,
   onTaskLogDragStart,
   draggingTaskLogId,
@@ -247,6 +251,57 @@ function CalendarEventSlots({
             eventTitle={meeting.title}
             icon={meeting.meeting_habits?.length > 0 ? <Check className="w-2 h-2" /> : undefined}
             duration={formatDuration(Math.round(meetingDuration))}
+          />
+        )
+      })}
+
+      {/* Project Activity */}
+      {projectActivityInSlot.map(activity => {
+        const activityEnd = new Date(activity.end_time)
+        const isClipped = !!activity._clippedStart
+        let activityStart: Date
+        let activityDuration: number
+        let topPositionInSlot: number
+
+        if (isClipped) {
+          activityStart = new Date(activity.start_time)
+          activityStart.setHours(GRID_START_HOUR, 0, 0, 0)
+          topPositionInSlot = 0
+          activityDuration = (activityEnd.getTime() - activityStart.getTime()) / (1000 * 60)
+        } else {
+          activityStart = new Date(activity.start_time)
+          const startHour = activityStart.getHours()
+          if (isLateNightHour(startHour)) {
+            const splitAt = new Date(activityStart)
+            splitAt.setHours(GRID_START_HOUR, 0, 0, 0)
+            const clippedEnd = activityEnd > splitAt ? splitAt : activityEnd
+            activityDuration = (clippedEnd.getTime() - activityStart.getTime()) / (1000 * 60)
+          } else {
+            activityDuration = (activityEnd.getTime() - activityStart.getTime()) / (1000 * 60)
+          }
+          topPositionInSlot = (activityStart.getMinutes() / 60) * 100
+        }
+
+        const activityHeight = (activityDuration / 60) * 64
+        const projectColor = activity.projects?.color
+        const projectName = activity.projects?.name || 'Project'
+
+        return (
+          <CalendarEvent
+            key={`project-activity-${activity.id}${isClipped ? '-clipped' : ''}`}
+            type="session"
+            style={{
+              ...getEventStyle(topPositionInSlot, activityHeight, 14),
+              ...(projectColor ? { backgroundColor: projectColor, color: '#fff' } : {}),
+              cursor: handleProjectActivityClick ? 'pointer' : undefined,
+            }}
+            onClick={handleProjectActivityClick ? (e) => {
+              e.stopPropagation()
+              handleProjectActivityClick(activity)
+            } : undefined}
+            eventTitle={projectName}
+            subtitle={activity.note || undefined}
+            duration={formatDuration(Math.round(activityDuration))}
           />
         )
       })}

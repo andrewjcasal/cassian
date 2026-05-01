@@ -8,6 +8,7 @@ import HabitModal from '../components/HabitModal'
 import SessionEditModal from '../components/SessionEditModal'
 import NeedHelpModal from '../components/NeedHelpModal'
 import CreateHabitModal from '../components/CreateHabitModal'
+import ProjectActivityModal from '../components/ProjectActivityModal'
 import {
   ModalContext,
   ModalState,
@@ -45,6 +46,8 @@ const initialModalState: ModalState = {
   showNeedHelpModal: false,
   showCreateHabitModal: false,
   createHabitDefaults: null,
+  showProjectActivityModal: false,
+  selectedProjectActivity: null,
 }
 
 export const ModalProvider = ({ children }: { children: ReactNode }) => {
@@ -103,6 +106,8 @@ export const ModalProvider = ({ children }: { children: ReactNode }) => {
     resizeConflictNewEndTime: null,
     showCreateHabitModal: false,
     createHabitDefaults: null,
+    showProjectActivityModal: false,
+    selectedProjectActivity: null,
   }), [])
 
   const registerModalHandlers = useCallback((next: CalendarModalHandlers) => {
@@ -308,6 +313,18 @@ export const ModalProvider = ({ children }: { children: ReactNode }) => {
     setModalState(prev => ({ ...prev, showCreateHabitModal: false, createHabitDefaults: null }))
   }
 
+  const openProjectActivityModal = (activity: any) => {
+    setModalState(prev => ({
+      ...getClosedModalState(prev),
+      showProjectActivityModal: true,
+      selectedProjectActivity: activity,
+    }))
+  }
+
+  const closeProjectActivityModal = () => {
+    setModalState(prev => ({ ...prev, showProjectActivityModal: false, selectedProjectActivity: null }))
+  }
+
   const value: ModalContextType = {
     ...modalState,
     calendarData,
@@ -324,6 +341,14 @@ export const ModalProvider = ({ children }: { children: ReactNode }) => {
         closeMeetingModal()
       }
     },
+    handleSaveProjectActivity: async activity => {
+      await handlersRef.current.onSaveProjectActivity?.(activity)
+      closeMeetingModal()
+    },
+    handleDeleteProjectActivity: async (id: string) => {
+      await handlersRef.current.onDeleteProjectActivity?.(id)
+      closeProjectActivityModal()
+    },
     openHabitModal,
     closeHabitModal,
     openTaskModal,
@@ -338,6 +363,8 @@ export const ModalProvider = ({ children }: { children: ReactNode }) => {
     closeNeedHelpModal,
     openCreateHabitModal,
     closeCreateHabitModal,
+    openProjectActivityModal,
+    closeProjectActivityModal,
     registerModalHandlers,
     setCalendarModalData,
   }
@@ -352,6 +379,7 @@ export const ModalProvider = ({ children }: { children: ReactNode }) => {
         previousTitles={calendarData.meetingTitles}
         categories={calendarData.meetingCategories}
         calendarHabits={calendarData.habits}
+        projects={calendarData.projects}
       />
       <CreateHabitModal
         isOpen={modalState.showCreateHabitModal}
@@ -425,6 +453,18 @@ export const ModalProvider = ({ children }: { children: ReactNode }) => {
         </div>
       )}
       <NeedHelpModal isOpen={modalState.showNeedHelpModal} onClose={closeNeedHelpModal} />
+      <ProjectActivityModal
+        isOpen={modalState.showProjectActivityModal}
+        activity={modalState.selectedProjectActivity}
+        allActivity={calendarData.projectActivity || []}
+        onClose={closeProjectActivityModal}
+        onDelete={async () => {
+          if (modalState.selectedProjectActivity) {
+            await handlersRef.current.onDeleteProjectActivity?.(modalState.selectedProjectActivity.id)
+            closeProjectActivityModal()
+          }
+        }}
+      />
       {children}
     </ModalContext.Provider>
   )
